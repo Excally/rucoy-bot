@@ -183,6 +183,30 @@ class ExhaustionBehaviorTests(unittest.TestCase):
         self.assertEqual(len(closed_at), 1)
         self.assertGreaterEqual(closed_at[0], 10.8)
 
+    def test_exhausted_caption_detects_real_frame_and_rejects_negative_or_blank(self):
+        vision = FrameVision()
+        import cv2
+        from pathlib import Path
+        template_path = Path("templates/exhausted-caption.png")
+        if not template_path.exists():
+            return
+        template = cv2.imread(str(template_path))
+        self.assertIsNotNone(template)
+
+        self.assertFalse(vision.exhausted_caption(np.zeros((900, 1600, 3), dtype=np.uint8), template))
+        self.assertFalse(vision.exhausted_caption(None, template))
+        self.assertFalse(vision.exhausted_caption(np.zeros((900, 1600, 3), dtype=np.uint8), None))
+
+        positive_path = Path("Screenshot_2026.10.11_15.24.04.835.png")
+        if positive_path.exists():
+            pos_frame = cv2.imread(str(positive_path))
+            self.assertTrue(vision.exhausted_caption(pos_frame, template))
+
+        negative_path = Path("Screenshot_2026.10.11_09.06.57.232.png")
+        if negative_path.exists():
+            neg_frame = cv2.imread(str(negative_path))
+            self.assertFalse(vision.exhausted_caption(neg_frame, template))
+
 
 if __name__ == "__main__":
     unittest.main()

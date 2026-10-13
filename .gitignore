@@ -4,3 +4,6 @@ __pycache__/
 release/
 *.build/
 *.dist/
+debug_*.png
+test*.png
+potion_calibration_*.png

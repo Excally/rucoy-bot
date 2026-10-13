@@ -546,7 +546,10 @@ class FrameVision:
         if frame is None or template is None:
             return False
         fh, fw = frame.shape[:2]
-        if self._caption_cache is None or self._caption_cache[0] is not template:
+        screen_scale = fw / 1600.0
+
+        cache = self._caption_cache
+        if cache is None or cache[0] is not template or cache[1] != screen_scale:
             hsv = cv2.cvtColor(template, cv2.COLOR_BGR2HSV)
             low_red = cv2.inRange(hsv, (0, 110, 90), (10, 255, 255))
             high_red = cv2.inRange(hsv, (170, 110, 90), (179, 255, 255))
@@ -555,34 +558,30 @@ class FrameVision:
             if points is None:
                 return False
             x, y, width, height = cv2.boundingRect(points)
-            mask = mask[y:y + height, x:x + width]
-            density = cv2.countNonZero(mask) / (width * height)
-            self._caption_cache = (template, width, height, density)
-        _, template_w, template_h, density = self._caption_cache
-        x0, x1, y0, y1 = int(fw * 0.05), int(fw * 0.95), int(fh * 0.50), int(fh * 0.85)
+            mask_crop = mask[y:y + height, x:x + width]
+            if screen_scale != 1.0:
+                mask_crop = cv2.resize(
+                    mask_crop, None, fx=screen_scale, fy=screen_scale, interpolation=cv2.INTER_NEAREST
+                )
+            min_pixels = int(cv2.countNonZero(mask_crop) * 0.45)
+            self._caption_cache = (template, screen_scale, mask_crop, min_pixels)
+
+        _, _, t_mask, min_pixels = self._caption_cache
+
+        x0, x1 = int(fw * 0.05), int(fw * 0.95)
+        y0, y1 = int(fh * 0.50), int(fh * 0.85)
         region = frame[y0:y1, x0:x1]
+        if region.shape[0] < t_mask.shape[0] or region.shape[1] < t_mask.shape[1]:
+            return False
+
         hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
         low_red = cv2.inRange(hsv, (0, 110, 90), (10, 255, 255))
         high_red = cv2.inRange(hsv, (170, 110, 90), (179, 255, 255))
         red_mask = cv2.bitwise_or(low_red, high_red)
-        screen_scale = fw / 1600.0
-        processing_scale = min(0.5, 800.0 / max(1, region.shape[1]))
-        if processing_scale < 1.0:
-            red_mask = cv2.resize(red_mask, None, fx=processing_scale, fy=processing_scale, interpolation=cv2.INTER_NEAREST)
-        close_width = max(5, int(round(15 * screen_scale * processing_scale)))
-        joined = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, np.ones((3, close_width), dtype=np.uint8))
-        count, _, stats, _ = cv2.connectedComponentsWithStats(joined, 8)
-        expected_w, expected_h = template_w * screen_scale * processing_scale, template_h * screen_scale * processing_scale
-        min_w, max_w, min_h, max_h = expected_w * 0.50, expected_w * 1.20, expected_h * 0.45, expected_h * 1.50
-        min_aspect, max_aspect = (template_w / template_h) * 0.55, (template_w / template_h) * 1.70
-        min_density, max_density = density * 0.45, min(0.78, density * 1.80)
-        for x, y, width, height, _ in stats[1:count]:
-            if not (min_w <= width <= max_w and min_h <= height <= max_h):
-                continue
-            aspect = width / max(1, height)
-            if not (min_aspect <= aspect <= max_aspect):
-                continue
-            area_density = cv2.countNonZero(red_mask[y:y + height, x:x + width]) / (width * height)
-            if min_density <= area_density <= max_density:
-                return True
-        return False
+
+        if cv2.countNonZero(red_mask) < min_pixels:
+            return False
+
+        res = cv2.matchTemplate(red_mask, t_mask, cv2.TM_CCORR_NORMED)
+        _, max_val, _, _ = cv2.minMaxLoc(res)
+        return max_val >= 0.70

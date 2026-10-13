@@ -31,7 +31,7 @@ class BotConfig:
     margin_bottom: float = 0.06
     margin_left: float = 0.06
     margin_right: float = 0.06
-    mob_body_y_offset: int = 38
+    mob_body_y_offset: int = 50
     player_deadzone_radius: int = 90
     match_threshold: float = 0.60
     min_name_template_overlap: float = 0.58
@@ -46,10 +46,10 @@ class BotConfig:
     white_text_max_channel_spread: int = 50
 
     idle_mark_check_interval: float = 1.0
-    target_position_refresh_interval: float = 0.25
+    target_position_refresh_interval: float = 0.10
     target_reacquire_radius: float = 90
     # Do not trust a lingering red outline after the target nameplate vanishes.
-    target_entity_loss_timeout: float = 2.0
+    target_entity_loss_timeout: float = 1.5
     # Release quickly when the exact marker disappears; a surviving nameplate
     # alone is not enough to keep a target locked.
     target_red_loss_timeout: float = 1.0
@@ -69,8 +69,8 @@ class BotConfig:
     pvp_potion_check_interval: float = 0.1
     pvp_mode: bool = False
     potion_cooldown: float = 1.0
-    hp_potion_tap: tuple[int, int] = (60, 745)
-    mana_potion_tap: tuple[int, int] = (60, 610)
+    hp_potion_tap: tuple[int, int] = (75, 825)
+    mana_potion_tap: tuple[int, int] = (75, 675)
 
     # Combat class
     combat_class: str = "melee"
