@@ -54,12 +54,15 @@ class BotConfig:
     # alone is not enough to keep a target locked.
     target_red_loss_timeout: float = 1.0
     ui_check_interval: float = 0.35
+    # Exhaustion & Target Management for Training
     exhausted_caption_confirm_seconds: float = 10.0
     exhausted_caption_poll_seconds: float = 0.25
     exhausted_travel_trigger_count: int = 1
     exhausted_travel_window_seconds: float = 30.0
     exhausted_travel_hold_seconds: float = 10.0
     repeated_output_limit: int = 200
+    immediate_exhausted_switch: bool = False
+    max_mob_train_seconds: float = 0.0  # 0.0 = unlimited (train until exhausted/defeated)
 
     # Auto potion
     auto_potion_enabled: bool = True
@@ -72,8 +75,26 @@ class BotConfig:
     hp_potion_tap: tuple[int, int] = (75, 825)
     mana_potion_tap: tuple[int, int] = (75, 675)
 
-    # Combat class
+    # Training class
     combat_class: str = "melee"
+
+    # Class selector buttons
+    class_melee_tap: tuple[int, int] = (1550, 630)
+    class_ranged_tap: tuple[int, int] = (1550, 730)
+    class_magic_tap: tuple[int, int] = (1550, 830)
+
+    # Exhaustion recovery settings (melee unstuck routine)
+    exhaustion_recovery_skill_tap: tuple[int, int] = (75, 525)
+    exhaustion_recovery_skill_count: int = 4
+    exhaustion_recovery_skill_interval: float = 1.0
+    scene_unchanged_threshold: float = 25.0
+
+    # Training mode & Power Training (PT) settings
+    power_training_enabled: bool = False
+    special_skill_cooldown: float = 2.0
+    special_skill_min_mp: float = 0.20
+    special_skill_tap: tuple[int, int] = (1545, 632)
+    auto_pickup_enabled: bool = True
 
 
 def _resolve_template_dir() -> Path:
@@ -81,6 +102,63 @@ def _resolve_template_dir() -> Path:
     if (exe_dir / "templates").is_dir():
         return exe_dir / "templates"
     return Path(__file__).resolve().parent.parent / "templates"
+
+
+def resolve_user_settings_path() -> Path:
+    # When packaged as a standalone executable (e.g. Nuitka or PyInstaller):
+    # sys.executable points to the .exe file itself (e.g. C:\path\to\bot.exe).
+    is_frozen = getattr(sys, "frozen", False) or not sys.executable.lower().endswith(("python.exe", "pythonw.exe"))
+    if is_frozen:
+        exe_dir = Path(sys.executable).resolve().parent
+        return exe_dir / "training_settings.json"
+
+    # When running from source via python:
+    # Check repository root or current working directory
+    repo_root = Path(__file__).resolve().parent.parent
+    candidate = repo_root / "training_settings.json"
+    if candidate.is_file():
+        return candidate
+
+    cwd_candidate = Path.cwd() / "training_settings.json"
+    if cwd_candidate.is_file():
+        return cwd_candidate
+
+    return candidate
+
+
+def load_user_settings() -> dict:
+    path = resolve_user_settings_path()
+    if path.is_file():
+        try:
+            import json
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"[!] Could not read training settings from {path}: {e}")
+            return {}
+
+    # If running as standalone exe and no external settings file exists yet,
+    # fall back to embedded default bundled inside the onefile payload
+    embedded = Path(__file__).resolve().parent.parent / "training_settings.json"
+    if embedded.is_file() and embedded != path:
+        try:
+            import json
+            return json.loads(embedded.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    return {}
+
+
+def save_user_settings(data: dict) -> bool:
+    path = resolve_user_settings_path()
+    try:
+        import json
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        return True
+    except Exception as e:
+        print(f"[!] Could not save training settings to {path}: {e}")
+        return False
 
 
 CONFIG = BotConfig()

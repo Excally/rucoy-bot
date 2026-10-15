@@ -62,8 +62,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             selection = launch_gui(settings)
             if selection is None:
                 return 0
-            profile, combat_class = selection
-            run_bot(profile, combat_class=combat_class)
+            profile, combat_class = selection[0], selection[1]
+            config = getattr(selection, "config", None)
+            if config is not None:
+                run_bot(profile, combat_class=combat_class, config=config)
+            else:
+                run_bot(profile, combat_class=combat_class)
             return 0
         except Exception:
             pass

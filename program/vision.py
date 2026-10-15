@@ -585,3 +585,24 @@ class FrameVision:
         res = cv2.matchTemplate(red_mask, t_mask, cv2.TM_CCORR_NORMED)
         _, max_val, _, _ = cv2.minMaxLoc(res)
         return max_val >= 0.70
+
+    def screen_unchanged(
+        self,
+        before: Optional[np.ndarray],
+        after: Optional[np.ndarray],
+        threshold: Optional[float] = None,
+    ) -> bool:
+        """Compare the game viewport between frames to determine if the player stayed in the same spot."""
+        if before is None or after is None:
+            return False
+        if before.shape != after.shape:
+            return False
+        diff_threshold = self.config.scene_unchanged_threshold if threshold is None else threshold
+        fh, fw = before.shape[:2]
+        # Compare main viewport, excluding upper HUD (bars, minimap button) and outer borders
+        y0, y1 = int(fh * 0.12), int(fh * 0.88)
+        x0, x1 = int(fw * 0.08), int(fw * 0.92)
+        crop_before = before[y0:y1, x0:x1]
+        crop_after = after[y0:y1, x0:x1]
+        mean_diff = float(np.mean(np.abs(crop_before.astype(np.int16) - crop_after.astype(np.int16))))
+        return mean_diff < diff_threshold

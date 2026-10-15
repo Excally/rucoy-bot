@@ -7,3 +7,4 @@ release/
 debug_*.png
 test*.png
 potion_calibration_*.png
+training_settings.json

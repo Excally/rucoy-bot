@@ -83,16 +83,31 @@ class RucoyBot:
         else:
             print("[~] Runtime matcher found no eligible target in the startup frame; scanning will continue.")
 
+    def _get_special_skill_coord(self) -> tuple[int, int]:
+        if self.config.special_skill_tap != (1545, 632):
+            return self.config.special_skill_tap
+        if self.combat_class == "ranged":
+            return (1545, 736)
+        if self.combat_class == "magic":
+            return (1545, 840)
+        return (1545, 632)
+
     def _print_startup(self) -> None:
         assert self.device is not None
-        print(f"\n[+] Zone profile: '{self.profile.key}'")
-        print(f"[+] Target: '{self.profile.target_name}'")
-        print(f"[+] Combat class: {self.combat_class.upper()}")
+        print(f"\n[+] 🥋 Training Profile: '{self.profile.key}'")
+        print(f"[+] Target Mob: '{self.profile.target_name}'")
+        print(f"[+] Training Skill: {self.combat_class.upper()}")
+        mode_str = "POWER TRAINING (⚡ Special Ability Spam)" if self.config.power_training_enabled else "NORMAL AFK (⏱️ Skill Tick Training)"
+        print(f"[+] Training Mode: {mode_str}")
+        if self.config.power_training_enabled:
+            print(f"[+] Special Interval: {self.config.special_skill_cooldown:.1f}s (Min MP: {int(self.config.special_skill_min_mp * 100)}%)")
+        if self.config.max_mob_train_seconds > 0:
+            print(f"[+] Max Time Per Mob: {self.config.max_mob_train_seconds:.0f}s (Anti-exhaustion target rotation)")
         print(f"[+] Name template: {self.profile.target_template_key}")
         print(f"[+] Minimap template: {self.profile.minimap_template_key}")
         print(f"[+] Method: {'ADB Background Tap (Free Mouse)' if self.device.use_adb else 'Win32 Click'}")
         print(f"[+] Background: {'YES (Can stay behind other windows)' if self.device.use_adb else 'Window visible'}")
-        print(f"[+] Movement: Registered minimap waypoints ({'enabled' if self.config.enable_minimap_walk else 'disabled'})")
+        print(f"[+] Roaming: Registered minimap waypoints ({'enabled' if self.config.enable_minimap_walk else 'disabled'})")
         if self.combat_class in ("ranged", "magic"):
             print(
                 "[+] Class auto-approach: ON (approaching mob until red mark acquired, then hold position)"
@@ -107,11 +122,14 @@ class RucoyBot:
         )
         print(f"[+] Hitbox Offset: {self.config.mob_body_y_offset}px below nametag (centered on mob body)")
         print(f"[+] Target marker check: waiting for the exact marked.png outline; nearest visible {self.profile.target_name} first")
-        print(
-            f"[+] Exhaustion failsafe: {self.config.exhausted_travel_trigger_count} consecutive exhausted targets "
-            f"within {self.config.exhausted_travel_window_seconds:.0f}s -> farthest minimap point, "
-            f"hold {self.config.exhausted_travel_hold_seconds:.0f}s"
-        )
+        if self.config.immediate_exhausted_switch:
+            print("[+] Exhaustion handling: IMMEDIATE switch to new mob on caption detection")
+        else:
+            print(
+                f"[+] Exhaustion failsafe: {self.config.exhausted_travel_trigger_count} consecutive exhausted targets "
+                f"within {self.config.exhausted_travel_window_seconds:.0f}s -> farthest minimap point, "
+                f"hold {self.config.exhausted_travel_hold_seconds:.0f}s"
+            )
         preview_status = "ON (Press q in preview window to exit)" if self.config.show_preview else "OFF (Press Ctrl+C in terminal to exit)"
         print(f"[+] Preview: {preview_status}")
         if self.config.auto_potion_enabled:
@@ -123,7 +141,7 @@ class RucoyBot:
             )
         else:
             print("[+] Auto potion: OFF")
-        print("\n[+] Hunting loop started! You can work while bot is AFK.\n")
+        print("\n[+] Training loop started! AFK skill training in progress.\n")
 
     def run(self) -> None:
         if not self.start() or self.device is None:
@@ -179,11 +197,14 @@ class RucoyBot:
         # Finish a pending loot tap before selecting the next mob. Sending it
         # after target acquisition can immediately steal the game's focus.
         if state.current_target is None and state.pickup_pending:
-            pickup = self.vision.pickup_position(frame)
-            if pickup is not None:
-                print(f"[+] Pickup available after kill; tapping ({pickup[0]}, {pickup[1]}).")
-                if self.device.click(*pickup):
-                    state.pickup_pending = False
+            if cfg.auto_pickup_enabled:
+                pickup = self.vision.pickup_position(frame)
+                if pickup is not None:
+                    print(f"[+] Pickup available after kill; tapping ({pickup[0]}, {pickup[1]}).")
+                    if self.device.click(*pickup):
+                        state.pickup_pending = False
+            else:
+                state.pickup_pending = False
         if state.current_target is None:
             self._acquire_target(frame, cx, cy, now)
         self._check_exhausted_caption(frame, now)
@@ -298,6 +319,7 @@ class RucoyBot:
                 state.current_target = best
                 state.target_click_time = now
                 state.confirmed_locked = True
+                state.mob_training_started_at = now
                 return
             # An exact mark on a farther/unknown mob must not override the
             # nearest-nameplate rule while starting or recovering the bot.
@@ -313,6 +335,7 @@ class RucoyBot:
         state.ignored_stale_marker = None
         state.target_click_time = now
         state.confirmed_locked = False
+        state.mob_training_started_at = 0.0
         state.idle_mark_check_needed = False
         state.no_target_since = now
 
@@ -359,6 +382,7 @@ class RucoyBot:
                     )
                 state.current_target = None
                 state.confirmed_locked = False
+                state.mob_training_started_at = 0.0
                 state.idle_mark_check_needed = False
                 state.no_target_since = now
             else:
@@ -373,11 +397,26 @@ class RucoyBot:
                     )
                     state.current_target = None
                     state.confirmed_locked = False
+                    state.mob_training_started_at = 0.0
                     state.idle_mark_check_needed = True
                     state.no_target_since = now
         elif due:
             state.exhausted_caption_next_poll = now + cfg.exhausted_caption_poll_seconds
             if caption_visible:
+                if cfg.immediate_exhausted_switch:
+                    target = state.current_target
+                    tx, ty = target["click_x"], target["click_y"]
+                    print(
+                        f"[~] Exhausted caption detected; immediate switch enabled -> "
+                        f"releasing target at ({tx}, {ty}) and acquiring next mob."
+                    )
+                    state.current_target = None
+                    state.confirmed_locked = False
+                    state.mob_training_started_at = 0.0
+                    state.idle_mark_check_needed = True
+                    state.no_target_since = now
+                    state.ignored_stale_marker = (tx, ty)
+                    return
                 state.exhausted_caption_check_at = now + cfg.exhausted_caption_confirm_seconds
                 print(f"[~] Exhausted caption detected; checking again in {cfg.exhausted_caption_confirm_seconds:.0f}s.")
 
@@ -390,6 +429,9 @@ class RucoyBot:
             print("[!] Exhausted travel failsafe skipped because minimap walking is disabled.")
             self._reset_exhaustion_streak()
             return
+        device = getattr(self, "device", None)
+        before_frame = device.capture() if device is not None else None
+
         moved = self.navigator.travel(
             farthest=True,
             keep_open_seconds=max(0.0, cfg.exhausted_travel_hold_seconds),
@@ -397,12 +439,51 @@ class RucoyBot:
         state.last_minimap_time = time.monotonic()
         state.no_target_since = state.last_minimap_time
         self._reset_exhaustion_streak()
+
+        if device is not None and before_frame is not None:
+            time.sleep(0.5)
+            after_frame = device.capture()
+            screen_unchanged_fn = getattr(self.vision, "screen_unchanged", None)
+            is_unchanged = screen_unchanged_fn(before_frame, after_frame) if screen_unchanged_fn is not None else False
+            if after_frame is not None and is_unchanged:
+                print("[!] Player stayed in the same spot after exhausted travel.")
+                combat_class = getattr(self, "combat_class", "melee")
+                if combat_class == "melee":
+                    self._execute_melee_exhaustion_recovery()
+                    print("[+] Retrying exhausted travel after ranged power skill recovery...")
+                    moved = self.navigator.travel(
+                        farthest=True,
+                        keep_open_seconds=max(0.0, cfg.exhausted_travel_hold_seconds),
+                    )
+                    state.last_minimap_time = time.monotonic()
+                    state.no_target_since = state.last_minimap_time
+
         if moved:
             # The old screen coordinate belongs to the exhausted mob.  After
             # travelling, allow a fresh scan in the new camera position.
             print("[+] Exhausted travel failsafe complete; resuming normal target scanning.")
         else:
             print("[!] Exhausted travel failsafe could not move; resuming normal scanning.")
+
+    def _execute_melee_exhaustion_recovery(self) -> None:
+        """Switch to ranged, fire power skill 4 times (1s interval) to clear blocking mobs, then switch back to melee."""
+        assert self.device is not None
+        cfg = self.config
+        print(f"[+] Melee exhaustion failsafe: switching to Ranged class at {cfg.class_ranged_tap}...")
+        self.device.click(*cfg.class_ranged_tap)
+        time.sleep(0.5)
+
+        print(
+            f"[+] Using Ranged auto-target power skill at {cfg.exhaustion_recovery_skill_tap} "
+            f"{cfg.exhaustion_recovery_skill_count} times ({cfg.exhaustion_recovery_skill_interval:.1f}s interval)..."
+        )
+        for _ in range(cfg.exhaustion_recovery_skill_count):
+            self.device.click(*cfg.exhaustion_recovery_skill_tap)
+            time.sleep(cfg.exhaustion_recovery_skill_interval)
+
+        print(f"[+] Switching back to Melee class at {cfg.class_melee_tap}...")
+        self.device.click(*cfg.class_melee_tap)
+        time.sleep(0.5)
 
     def _reset_exhaustion_streak(self) -> None:
         self.state.consecutive_exhausted = 0
@@ -440,7 +521,37 @@ class RucoyBot:
                 if target["red_observations"] < 2:
                     return
                 state.confirmed_locked = True
-                print(f"[*] Target locked with red square! Fighting at ({tx}, {ty})...")
+                state.mob_training_started_at = now
+                print(f"[*] Target locked with red square! Training at ({tx}, {ty})...")
+
+            # Max mob training duration safeguard (rotates mobs before exhaustion)
+            if (
+                cfg.max_mob_train_seconds > 0.0
+                and state.mob_training_started_at > 0.0
+                and now - state.mob_training_started_at >= cfg.max_mob_train_seconds
+            ):
+                print(
+                    f"[~] Training duration limit ({cfg.max_mob_train_seconds:.0f}s) reached on mob at ({tx}, {ty}); "
+                    f"switching target to prevent exhaustion."
+                )
+                state.current_target = None
+                state.confirmed_locked = False
+                state.mob_training_started_at = 0.0
+                state.idle_mark_check_needed = True
+                state.no_target_since = now
+                state.ignored_stale_marker = (tx, ty)
+                return
+
+            # Power Training (PT) auto-special ability execution
+            if cfg.power_training_enabled and now - state.last_special_skill_at >= cfg.special_skill_cooldown:
+                can_cast = True
+                if cfg.special_skill_min_mp > 0.0 and self.vision.mp_below_threshold(frame, cfg.special_skill_min_mp):
+                    can_cast = False
+                if can_cast and self.device is not None:
+                    sp_x, sp_y = self._get_special_skill_coord()
+                    self.device.click(sp_x, sp_y)
+                    state.last_special_skill_at = now
+
             # Locked onto mob: do nothing else, never drop lock, never click ground or other mobs.
             return
 
@@ -461,6 +572,7 @@ class RucoyBot:
             )
             state.current_target = None
             state.confirmed_locked = False
+            state.mob_training_started_at = 0.0
             self._reset_exhaustion_streak()
             state.idle_mark_check_needed = False
             state.no_target_since = now
@@ -494,6 +606,7 @@ class RucoyBot:
                 )
                 state.current_target = None
                 state.confirmed_locked = False
+                state.mob_training_started_at = 0.0
                 self._reset_exhaustion_streak()
                 state.idle_mark_check_needed = False
                 state.no_target_since = now
@@ -526,6 +639,7 @@ class RucoyBot:
             )
             state.current_target = None
             state.confirmed_locked = False
+            state.mob_training_started_at = 0.0
             state.idle_mark_check_needed = True
             state.no_target_since = now
             self._reset_exhaustion_streak()
@@ -584,9 +698,10 @@ class RucoyBot:
                 time.sleep(0.01)
             return
         display = frame.copy()
+        mode_tag = "PT" if self.config.power_training_enabled else "Normal"
         cv2.putText(
             display,
-            f"Class: {self.combat_class.upper()}",
+            f"Training: {self.combat_class.upper()} [{mode_tag}]",
             (10, 85),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.6,
@@ -601,7 +716,7 @@ class RucoyBot:
             cv2.line(display, (cx, cy), (tx, ty), color, 1)
         fh, fw = frame.shape[:2]
         scale = min(1.0, 1600 / fw, 900 / fh)
-        cv2.imshow("Rucoy Online Bot - AFK Preview", cv2.resize(display, (int(fw * scale), int(fh * scale))))
+        cv2.imshow("Rucoy Online - AFK Training Preview", cv2.resize(display, (int(fw * scale), int(fh * scale))))
         if cv2.waitKey(1) & 0xFF == ord("q"):
             print("[+] Quit key pressed.")
             raise BotQuit

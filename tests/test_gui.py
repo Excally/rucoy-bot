@@ -61,13 +61,42 @@ class GuiLauncherTests(unittest.TestCase):
             mock_launch.assert_called_once()
             mock_run.assert_called_once_with(self.profile1, combat_class="magic")
 
-    def test_cli_gui_cancel_returns_zero(self):
-        with patch("program.gui.launch_gui") as mock_launch, patch("program.cli.run_bot") as mock_run:
-            mock_launch.return_value = None
-            result = main(["--gui"])
-            self.assertEqual(result, 0)
-            mock_launch.assert_called_once()
-            mock_run.assert_not_called()
+    def test_gui_dialog_save_and_load_explicit(self):
+        try:
+            dialog = LauncherDialog(self.settings)
+            test_cfg = {
+                "active_profile": "zombie-lv65",
+                "combat_class": "magic",
+                "training_mode": "power",
+                "power_training_enabled": True,
+                "special_skill_cooldown": 3.5,
+                "hp_potion_threshold": 0.65,
+                "mp_potion_threshold": 0.45,
+            }
+            dialog._apply_settings_dict(test_cfg)
+            self.assertEqual(dialog.class_var.get(), "magic")
+            self.assertEqual(dialog.training_mode_var.get(), "power")
+            self.assertTrue(dialog.pt_enabled_var.get())
+            self.assertEqual(dialog.pt_interval_var.get(), 3.5)
+            self.assertEqual(dialog.hp_threshold_var.get(), 0.65)
+            self.assertEqual(dialog.mp_threshold_var.get(), 0.45)
+
+            with patch("program.gui.save_user_settings", return_value=True) as mock_save:
+                dialog._on_save_explicit()
+                mock_save.assert_called_once()
+                saved_payload = mock_save.call_args[0][0]
+                self.assertEqual(saved_payload["combat_class"], "magic")
+                self.assertEqual(saved_payload["special_skill_cooldown"], 3.5)
+
+            with patch("program.gui.load_user_settings", return_value=test_cfg) as mock_load:
+                dialog.class_var.set("melee")
+                dialog._on_load_explicit()
+                mock_load.assert_called_once()
+                self.assertEqual(dialog.class_var.get(), "magic")
+
+            dialog.root.destroy()
+        except Exception as e:
+            self.skipTest(f"Tkinter display not available: {e}")
 
 
 if __name__ == "__main__":

@@ -15,6 +15,9 @@ class _AlwaysExhaustedVision:
     def exhausted_caption(self, frame, template):
         return True
 
+    def screen_unchanged(self, before, after, threshold=None):
+        return True
+
 
 class _ClearedCaptionVision:
     def exhausted_caption(self, frame, template):
@@ -210,6 +213,77 @@ class ExhaustionBehaviorTests(unittest.TestCase):
         if negative_path.exists():
             neg_frame = cv2.imread(str(negative_path))
             self.assertFalse(vision.exhausted_caption(neg_frame, template))
+
+    def test_screen_unchanged_detects_same_scene_and_rejects_different(self):
+        vision = FrameVision()
+        frame1 = np.full((900, 1600, 3), 100, dtype=np.uint8)
+        frame2 = frame1.copy()
+        self.assertTrue(vision.screen_unchanged(frame1, frame2))
+
+        # Minor noise (e.g. idle animation) still counts as unchanged
+        frame_noisy = frame1.copy()
+        frame_noisy[400:450, 750:850] = 120
+        self.assertTrue(vision.screen_unchanged(frame1, frame_noisy))
+
+        # Major scene shift (e.g. moved camera/tiles) counts as changed
+        frame_shifted = np.full((900, 1600, 3), 200, dtype=np.uint8)
+        self.assertFalse(vision.screen_unchanged(frame1, frame_shifted))
+
+    def test_melee_exhausted_travel_triggers_recovery_and_travel_retry_when_stuck(self):
+        bot = self._bot()
+        bot.combat_class = "melee"
+
+        clicks = []
+        frame = np.full((900, 1600, 3), 80, dtype=np.uint8)
+
+        class MockDevice:
+            def capture(self):
+                return frame
+
+            def click(self, x, y):
+                clicks.append((x, y))
+                return True
+
+        bot.device = MockDevice()
+
+        with patch("program.bot.time.sleep", return_value=None):
+            bot._run_exhausted_travel_failsafe(100.0)
+
+        # 1x Ranged switch (1550, 730), 4x Power skill (75, 525), 1x Melee switch (1550, 630)
+        expected_clicks = [
+            (1550, 730),
+            (75, 525),
+            (75, 525),
+            (75, 525),
+            (75, 525),
+            (1550, 630),
+        ]
+        self.assertEqual(clicks, expected_clicks)
+        # Navigator travel should be called twice (initial attempt + retry after clearing mobs)
+        self.assertEqual(len(bot.navigator.calls), 2)
+
+    def test_ranged_class_does_not_trigger_melee_recovery_when_stuck(self):
+        bot = self._bot()
+        bot.combat_class = "ranged"
+
+        clicks = []
+        frame = np.full((900, 1600, 3), 80, dtype=np.uint8)
+
+        class MockDevice:
+            def capture(self):
+                return frame
+
+            def click(self, x, y):
+                clicks.append((x, y))
+                return True
+
+        bot.device = MockDevice()
+
+        with patch("program.bot.time.sleep", return_value=None):
+            bot._run_exhausted_travel_failsafe(100.0)
+
+        self.assertEqual(clicks, [])
+        self.assertEqual(len(bot.navigator.calls), 1)
 
 
 if __name__ == "__main__":
