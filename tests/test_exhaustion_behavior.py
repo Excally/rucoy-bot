@@ -197,12 +197,16 @@ class ExhaustionBehaviorTests(unittest.TestCase):
         self.assertFalse(vision.exhausted_caption(None, template))
         self.assertFalse(vision.exhausted_caption(np.zeros((900, 1600, 3), dtype=np.uint8), None))
 
-        positive_path = Path("Screenshot_2026.10.11_15.24.04.835.png")
+        positive_path = Path("screenshot-stock/Screenshot_2026.10.11_15.24.04.835.png")
+        if not positive_path.exists():
+            positive_path = Path("Screenshot_2026.10.11_15.24.04.835.png")
         if positive_path.exists():
             pos_frame = cv2.imread(str(positive_path))
             self.assertTrue(vision.exhausted_caption(pos_frame, template))
 
-        negative_path = Path("Screenshot_2026.10.11_09.06.57.232.png")
+        negative_path = Path("screenshot-stock/Screenshot_2026.10.11_09.06.57.232.png")
+        if not negative_path.exists():
+            negative_path = Path("Screenshot_2026.10.11_09.06.57.232.png")
         if negative_path.exists():
             neg_frame = cv2.imread(str(negative_path))
             self.assertFalse(vision.exhausted_caption(neg_frame, template))

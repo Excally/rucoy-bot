@@ -671,7 +671,7 @@ class MinimapNavigator:
             canvas[y0:y0 + compare_view.shape[0], right_x + (panel_w - compare_view.shape[1]) // 2:right_x + (panel_w + compare_view.shape[1]) // 2] = compare_view
             footer_y = header_h + panel_h + 16
             cv2.putText(canvas, "Match grid: green=target wall hit, red=miss; cyan=context wall hit, orange=miss; blue=unexpected bright cell; gray=off-screen.", (14, footer_y), cv2.FONT_HERSHEY_SIMPLEX, 0.43, (210, 210, 210), 1, cv2.LINE_AA)
-            path = output_path or (Path(__file__).resolve().parents[1] / "minimap_alignment_latest.png")
+            path = output_path or (Path(__file__).resolve().parents[1] / "templates" / "debug" / "minimap_alignment_latest.png")
             path.parent.mkdir(parents=True, exist_ok=True)
             if not cv2.imwrite(str(path), canvas):
                 return None
