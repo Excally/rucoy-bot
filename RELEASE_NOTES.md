@@ -40,8 +40,8 @@ This release replaces that with a **walk-mark detection loop** that reads the ga
 
 | File | Size | Description |
 |---|---|---|
-| `release/bot.exe` | TBD | Standalone one-file Windows executable (Python 3.14 / Nuitka 4.2.2) |
-| `release/RucoyBot-Release.zip` | TBD | Complete distribution bundle with assets and templates |
+| `release/bot.exe` | 51,521,536 bytes | Standalone one-file Windows executable (Python 3.14 / Nuitka 4.2.2) |
+| `release/RucoyBot-Release.zip` | 51,634,790 bytes | Complete distribution bundle with assets and templates |
 
 ---
 
