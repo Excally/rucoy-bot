@@ -40,3 +40,7 @@ class BotState:
     last_mp_potion_at: float = 0.0
     last_special_skill_at: float = 0.0
     mob_training_started_at: float = 0.0
+    # Ranged/magic approach state: True while we've issued a walk-click and are
+    # waiting for the green walk mark to appear or disappear before re-clicking.
+    approach_walking: bool = False
+    approach_click_time: float = 0.0

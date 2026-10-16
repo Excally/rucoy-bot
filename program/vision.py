@@ -15,6 +15,7 @@ class TemplateStore:
         "skeleton_lv75", "minimapicon", "backicon",
         "minimap-skeleton-layout", "minimap-zombie-layout",
         "pickup-available", "pickup-not-yet", "exhausted-caption",
+        "walk-mark",
     }
 
     def __init__(self, directory: Path = TEMPLATE_DIR):
@@ -585,6 +586,40 @@ class FrameVision:
         res = cv2.matchTemplate(red_mask, t_mask, cv2.TM_CCORR_NORMED)
         _, max_val, _, _ = cv2.minMaxLoc(res)
         return max_val >= 0.70
+
+    def walk_mark_visible(self, frame: np.ndarray) -> bool:
+        """Return True if the green walk/movement marker square is visible on screen.
+
+        The template (walk-mark.png) is a solid-bordered green square that the
+        game draws on the ground when the player taps to move.  We detect it
+        via template matching against the green-channel dominant region of the
+        playfield.  The search is limited to the lower-center of the screen
+        where the ground tile is rendered.
+        """
+        template = self.templates.get("walk-mark") if self.templates else None
+        if template is None or frame is None:
+            return False
+        fh, fw = frame.shape[:2]
+        # Limit search to the lower 70% of the viewport, excluding HUD edges.
+        y0 = int(fh * 0.15)
+        y1 = int(fh * 0.90)
+        x0 = int(fw * 0.05)
+        x1 = int(fw * 0.95)
+        region = frame[y0:y1, x0:x1]
+        # Isolate bright-green pixels (the walk mark border color).
+        hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+        green_mask = cv2.inRange(hsv, (40, 150, 150), (80, 255, 255))
+        if cv2.countNonZero(green_mask) < 30:
+            return False
+        # Template match the binary green mask against a binarised template.
+        tmpl_hsv = cv2.cvtColor(template, cv2.COLOR_BGR2HSV)
+        tmpl_mask = cv2.inRange(tmpl_hsv, (40, 100, 100), (80, 255, 255))
+        th, tw = tmpl_mask.shape[:2]
+        if th >= green_mask.shape[0] or tw >= green_mask.shape[1] or th < 3 or tw < 3:
+            return False
+        result = cv2.matchTemplate(green_mask, tmpl_mask, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, _ = cv2.minMaxLoc(result)
+        return max_val >= 0.55
 
     def screen_unchanged(
         self,

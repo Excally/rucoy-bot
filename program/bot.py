@@ -338,6 +338,9 @@ class RucoyBot:
         state.mob_training_started_at = 0.0
         state.idle_mark_check_needed = False
         state.no_target_since = now
+        # Reset approach state whenever a fresh target is selected.
+        state.approach_walking = False
+        state.approach_click_time = 0.0
 
     def _check_exhausted_caption(self, frame: np.ndarray, now: float) -> None:
         state, cfg = self.state, self.config
@@ -522,6 +525,9 @@ class RucoyBot:
                     return
                 state.confirmed_locked = True
                 state.mob_training_started_at = now
+                # Clear approach state: we have a red lock now.
+                state.approach_walking = False
+                state.approach_click_time = 0.0
                 print(f"[*] Target locked with red square! Training at ({tx}, {ty})...")
 
             # Max mob training duration safeguard (rotates mobs before exhaustion)
@@ -584,6 +590,12 @@ class RucoyBot:
         target["red_observations"] = 0
         target.pop("red_last_seen", None)
         if state.exhausted_caption_check_at is not None:
+            return
+
+        # For ranged/magic: use walk-mark detection to throttle approach clicks
+        # instead of spamming movement every frame.
+        if self.combat_class in ("ranged", "magic"):
+            self._approach_mob(frame, target, now)
             return
 
         # Refresh entity position if nameplate is still visible while walking up to mob.
@@ -669,6 +681,49 @@ class RucoyBot:
         )
         distance = np.hypot(nearest["click_x"] - tx, nearest["click_y"] - ty)
         return nearest if distance <= match_radius else None
+
+    def _approach_mob(
+        self, frame: np.ndarray, target: TargetMatch, now: float,
+    ) -> None:
+        """Ranged/magic approach: walk toward the mob only when the player has stopped.
+
+        After the initial mob tap, the game shows a green walk-mark square while
+        the character is walking.  We check for that mark:
+          - Walk mark visible  → player is already walking; do nothing, wait.
+          - Walk mark gone     → player stopped (arrived or stuck); click near
+                                 the mob body to step closer, then wait again.
+
+        This replaces the old click-every-frame spam for ranged/magic classes.
+        """
+        assert self.device is not None
+        state = self.state
+        walk_visible = self.vision.walk_mark_visible(frame)
+
+        if walk_visible:
+            # Player is in motion — let the game handle movement; do not click.
+            if not state.approach_walking:
+                print("[~] Walk mark detected; approaching mob — holding position clicks.")
+            state.approach_walking = True
+            return
+
+        # Walk mark gone: player stopped moving (or first frame after tap).
+        # Only re-click if enough time has passed to avoid instant re-spam.
+        min_interval = 0.7  # seconds between approach re-clicks
+        if now - state.approach_click_time < min_interval:
+            return
+
+        if state.approach_walking:
+            print("[~] Walk mark gone; player stopped — clicking closer to mob.")
+        else:
+            # First approach click right after initial mob tap.
+            print("[~] No walk mark yet; sending initial approach click.")
+
+        tx, ty = target["click_x"], target["click_y"]
+        if self.device.click(tx, ty):
+            state.approach_walking = False   # reset; will go True when mark appears
+            state.approach_click_time = now
+        else:
+            print(f"[!] Approach click failed at ({tx}, {ty}); will retry.")
 
 
     def _check_potions(self, frame: np.ndarray, now: float) -> None:

@@ -170,7 +170,7 @@ class LauncherDialog:
 
         badge_lbl = tk.Label(
             title_row,
-            text=" AFK Optimizer v2.1 ",
+            text=" AFK Optimizer v2.2 ",
             font=("Segoe UI", 8, "bold"),
             bg=self.card_inner,
             fg=self.accent_green,
