@@ -33,8 +33,9 @@ class LaunchResult(tuple):
 class LauncherDialog:
     """A polished, modern dark-themed dashboard to configure AFK training, Power Training (PT), auto-potions, and stamina management."""
 
-    def __init__(self, settings: ProfileSettings):
+    def __init__(self, settings: ProfileSettings, mob_capture_default: Optional[str] = None):
         self.settings = settings
+        self.mob_capture_default = mob_capture_default
         self.result: Optional[LaunchResult] = None
         self.saved_cfg = load_user_settings()
 
@@ -71,6 +72,8 @@ class LauncherDialog:
         self._build_ui()
         if self.saved_cfg:
             self._apply_settings_dict(self.saved_cfg)
+            if self.mob_capture_default is not None:
+                self.mob_capture_var.set(self.mob_capture_default.upper())
         else:
             self._refresh_info_card()
 
@@ -122,6 +125,10 @@ class LauncherDialog:
         self.auto_pickup_var = tk.BooleanVar(value=bool(cfg.get("auto_pickup_enabled", True)))
         self.show_preview_var = tk.BooleanVar(value=bool(cfg.get("show_preview", False)))
         self.prefer_adb_var = tk.BooleanVar(value=bool(cfg.get("prefer_adb", True)))
+        mob_capture = self.mob_capture_default or cfg.get("mob_detection_capture", "adb")
+        if mob_capture not in {"adb", "win32"}:
+            mob_capture = "adb"
+        self.mob_capture_var = tk.StringVar(value=mob_capture.upper())
 
     def _setup_styles(self) -> None:
         style = ttk.Style(self.root)
@@ -737,13 +744,41 @@ class LauncherDialog:
 
         tk.Checkbutton(
             card,
-            text="Prefer ADB Background Mode (Zero mouse takeover, emulator can stay minimized)",
+            text="Prefer ADB for regular capture & taps (no mouse takeover)",
             variable=self.prefer_adb_var,
             font=("Segoe UI", 9),
             bg=self.card_bg,
             fg=self.fg_color,
             selectcolor=self.card_inner,
-        ).pack(anchor="w", padx=14, pady=(0, 14))
+        ).pack(anchor="w", padx=14, pady=(0, 8))
+
+        mob_capture_row = tk.Frame(card, bg=self.card_bg)
+        mob_capture_row.pack(fill="x", padx=14, pady=(0, 4))
+        tk.Label(
+            mob_capture_row,
+            text="Mob nameplate capture:",
+            font=("Segoe UI", 9),
+            bg=self.card_bg,
+            fg=self.fg_color,
+        ).pack(side="left")
+        self.mob_capture_combo = ttk.Combobox(
+            mob_capture_row,
+            values=("ADB", "Win32"),
+            textvariable=self.mob_capture_var,
+            state="readonly",
+            width=12,
+            font=("Segoe UI", 9),
+        )
+        self.mob_capture_combo.pack(side="right")
+        tk.Label(
+            card,
+            text="Win32 mob capture needs the emulator visible and unobscured. Other checks and taps keep their selected input backend.",
+            font=("Segoe UI", 8),
+            bg=self.card_bg,
+            fg=self.fg_dim,
+            wraplength=560,
+            justify="left",
+        ).pack(anchor="w", padx=14, pady=(0, 10))
 
         # Preset management
         card_p = self._create_card(f, "💾 Settings Persistence")
@@ -890,6 +925,7 @@ class LauncherDialog:
     def _build_config(self) -> BotConfig:
         return BotConfig(
             prefer_adb=self.prefer_adb_var.get(),
+            mob_detection_capture=self.mob_capture_var.get().lower(),
             show_preview=self.show_preview_var.get(),
             enable_minimap_walk=self.minimap_walk_var.get(),
             auto_pickup_enabled=self.auto_pickup_var.get(),
@@ -981,6 +1017,9 @@ class LauncherDialog:
             self.show_preview_var.set(bool(cfg["show_preview"]))
         if "prefer_adb" in cfg:
             self.prefer_adb_var.set(bool(cfg["prefer_adb"]))
+        mob_capture = str(cfg.get("mob_detection_capture", "adb")).lower()
+        if mob_capture in {"adb", "win32"}:
+            self.mob_capture_var.set(mob_capture.upper())
 
         # Update dynamic labels if widgets are already created
         if hasattr(self, "hp_lbl"):
@@ -1021,6 +1060,7 @@ class LauncherDialog:
             "auto_pickup_enabled": self.auto_pickup_var.get(),
             "show_preview": self.show_preview_var.get(),
             "prefer_adb": self.prefer_adb_var.get(),
+            "mob_detection_capture": self.mob_capture_var.get().lower(),
         }
         return save_user_settings(payload)
 
@@ -1061,6 +1101,7 @@ class LauncherDialog:
             "auto_pickup_enabled": True,
             "show_preview": False,
             "prefer_adb": True,
+            "mob_detection_capture": "adb",
         }
         self._apply_settings_dict(defaults)
         self.status_lbl.config(text="✓ Reset to recommended training defaults", fg=self.accent_green)
@@ -1086,7 +1127,9 @@ class LauncherDialog:
         return self.result
 
 
-def launch_gui(settings: ProfileSettings) -> Optional[LaunchResult]:
+def launch_gui(
+    settings: ProfileSettings, mob_capture_default: Optional[str] = None,
+) -> Optional[LaunchResult]:
     """Open the GUI launcher dashboard. Returns LaunchResult(profile, combat_class, config=...) or None."""
-    dialog = LauncherDialog(settings)
+    dialog = LauncherDialog(settings, mob_capture_default=mob_capture_default)
     return dialog.show()

@@ -12,6 +12,7 @@ The bot interfaces with an emulator running Rucoy Online using either direct ADB
 
 - **True Background Operation**: Communicates directly through local ADB socket commands (`input tap`), eliminating mouse cursor hijacking and allowing the emulator window to remain completely in the background or behind other applications.
 - **Computer Vision Targeting**: Identifies mob nametags using multi-scale template matching with color tolerance filtering and distance prioritization relative to the character.
+- **Selectable Mob Capture**: Mob nametags can be matched from the ADB framebuffer or a Win32 emulator-window capture. This setting applies only to mob nameplates; other screen checks and all taps keep their configured input backend.
 - **Combat Lock State Machine**: Monitors the exact in-game red target diamond/square (`marked.png`) to verify engagement before holding combat actions, preventing missed clicks or accidental map traversal.
 - **Multi-Class Combat Support**: Full support for Melee, Ranged, and Magic classes, including automated approach logic for ranged combatants until target lock is verified.
 - **Power Training (PT)**: Automatic execution of class-specific special abilities based on configurable cooldown timers and minimum mana reserve thresholds.
@@ -104,6 +105,7 @@ python bot.py
 The graphical launcher provides controls for:
 - Zone Profile selection (e.g., Zombie Lv.65, Skeleton Lv.75, Skeleton Warrior Lv.90).
 - Combat Class selection (`melee`, `ranged`, `magic`).
+- Mob nameplate capture source (`ADB` or `Win32`). Win32 capture requires the emulator window to remain visible and unobscured.
 - Training Mode: Normal AFK vs. Power Training (PT).
 - Power Training cooldown and minimum MP percentage requirement.
 - Target rotation timeout (maximum seconds per mob).
@@ -125,6 +127,9 @@ python bot.py --no-gui
 python bot.py --profile zombie-lv65 ranged --no-gui
 python bot.py --profile skeleton-warrior-lv90 magic --no-gui
 
+# Use Win32 capture only for mob nameplate detection; leave other checks and taps on their configured backend
+python bot.py --profile skeleton-warrior-lv90 melee --mob-capture win32 --no-gui
+
 # List all configured zone profiles
 python bot.py --list-profiles
 
@@ -139,6 +144,7 @@ python bot.py --show-config
 | `--profile` | `NAME` | Selects the zone profile defined in `zone_profiles.json`. |
 | `combat_class` | `melee\|ranged\|magic` | Positional combat class selector. |
 | `--class` | `melee\|ranged\|magic` | Flag-based combat class selector. |
+| `--mob-capture` | `adb\|win32` | Capture source for mob nameplate matching only (default: `adb`). |
 | `--gui` | None | Explicitly opens the Tkinter GUI dashboard. |
 | `--no-gui` | None | Runs directly in console mode without launching the GUI. |
 | `--list-profiles` | None | Displays all configured profiles and exits. |
@@ -172,7 +178,8 @@ Controls behavioral runtime parameters across sessions:
   "enable_minimap_walk": true,
   "auto_pickup_enabled": true,
   "show_preview": false,
-  "prefer_adb": true
+  "prefer_adb": true,
+  "mob_detection_capture": "adb"
 }
 ```
 

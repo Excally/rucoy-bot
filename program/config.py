@@ -8,6 +8,7 @@ import sys
 @dataclass(frozen=True)
 class BotConfig:
     prefer_adb: bool = True
+    mob_detection_capture: str = "adb"
     window_title: str = "MSI App Player"
     show_preview: bool = False
 

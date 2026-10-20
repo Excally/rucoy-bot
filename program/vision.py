@@ -248,7 +248,7 @@ class FrameVision:
     def find_targets(
         self, frame: np.ndarray, templates: list[tuple[np.ndarray, str]], center_x: int, center_y: int,
         *, search_center: Optional[tuple[int, int]] = None, search_radius: Optional[int] = None,
-        include_deadzone: bool = True,
+        include_deadzone: bool = True, preferred_scale: Optional[float] = None,
     ) -> list[TargetMatch]:
         # Match every name at native scale first.  The slower scale fallback is
         # used only when the complete primary pass found nothing, just like the
@@ -259,6 +259,7 @@ class FrameVision:
                 frame, template, color, center_x, center_y,
                 allow_fallback=False, search_center=search_center,
                 search_radius=search_radius, include_deadzone=include_deadzone,
+                preferred_scale=preferred_scale,
             ))
         if not matches:
             for template, color in templates:
@@ -266,7 +267,7 @@ class FrameVision:
                     frame, template, color, center_x, center_y,
                     allow_fallback=True, fallback_only=True,
                     search_center=search_center, search_radius=search_radius,
-                    include_deadzone=include_deadzone,
+                    include_deadzone=include_deadzone, preferred_scale=preferred_scale,
                 ))
         # White and purple versions can describe the same nametag.
         unique: list[TargetMatch] = []
@@ -283,7 +284,7 @@ class FrameVision:
         self, frame: np.ndarray, template: np.ndarray, name_color: str, center_x: int, center_y: int,
         allow_fallback: bool = True, fallback_only: bool = False,
         search_center: Optional[tuple[int, int]] = None, search_radius: Optional[int] = None,
-        include_deadzone: bool = True,
+        include_deadzone: bool = True, preferred_scale: Optional[float] = None,
     ) -> list[TargetMatch]:
         cfg = self.config
         fh, fw = frame.shape[:2]
@@ -394,9 +395,13 @@ class FrameVision:
                     })
 
         if not fallback_only:
-            scan(1.0)
+            scan(preferred_scale if preferred_scale is not None else 1.0)
         if allow_fallback and not matches:
-            for scale in (0.85, 1.15, 0.75, 1.25):
+            fallback_scales = (0.85, 1.15, 0.75, 1.25)
+            if preferred_scale is not None:
+                fallback_scales = (1.0, *fallback_scales)
+                fallback_scales = tuple(scale for scale in fallback_scales if abs(scale - preferred_scale) > 1e-6)
+            for scale in fallback_scales:
                 scan(scale)
                 if matches:
                     break

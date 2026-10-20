@@ -4,8 +4,10 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from typing import Optional, Sequence
 
+from .config import CONFIG
 from .profiles import ProfileSettings, load_profile_settings
 from .runner import run_bot
 
@@ -41,6 +43,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="combat class: melee, ranged, or magic (defaults to profile setting or 'melee')",
     )
     parser.add_argument("--class", dest="class_option", type=_combat_class_arg, help="combat class: melee, ranged, or magic")
+    parser.add_argument(
+        "--mob-capture", choices=("adb", "win32"), default=None, metavar="SOURCE",
+        help="capture source used only for mob nameplate detection (default: adb)",
+    )
     parser.add_argument("--gui", action="store_true", help="open GUI launcher dialog to select profile and class")
     parser.add_argument("--no-gui", action="store_true", help="run directly in console without GUI prompt")
     parser.add_argument("--list-profiles", action="store_true", help="list available profiles and exit")
@@ -59,15 +65,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if is_interactive:
         try:
             from .gui import launch_gui
-            selection = launch_gui(settings)
+            selection = launch_gui(settings, mob_capture_default=args.mob_capture)
             if selection is None:
                 return 0
             profile, combat_class = selection[0], selection[1]
             config = getattr(selection, "config", None)
-            if config is not None:
-                run_bot(profile, combat_class=combat_class, config=config)
-            else:
-                run_bot(profile, combat_class=combat_class)
+            config = config or CONFIG
+            if args.mob_capture is not None:
+                config = replace(config, mob_detection_capture=args.mob_capture)
+            run_bot(profile, combat_class=combat_class, config=config)
             return 0
         except Exception:
             pass
@@ -83,9 +89,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"Profile: {profile.key}")
         print(f"Target: {profile.target_name}")
         print(f"Combat class: {combat_class}")
+        print(f"Mob capture: {args.mob_capture or CONFIG.mob_detection_capture}")
         print(f"Name template: {profile.target_template_key}.png")
         print(f"Minimap template: {profile.minimap_template_key}.png")
         return 0
 
-    run_bot(profile, combat_class=combat_class)
+    config = replace(CONFIG, mob_detection_capture=args.mob_capture or CONFIG.mob_detection_capture)
+    run_bot(profile, combat_class=combat_class, config=config)
     return 0

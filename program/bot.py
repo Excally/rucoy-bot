@@ -39,6 +39,7 @@ class RucoyBot:
         self.navigator: Optional[MinimapNavigator] = None
         self.target_templates: list[tuple[np.ndarray, str]] = []
         self.state = BotState()
+        self._mob_capture_warning_emitted = False
 
     def start(self) -> bool:
         images = self.templates.load(self.profile.template_keys)
@@ -76,7 +77,7 @@ class RucoyBot:
         fh, fw = frame.shape[:2]
         player = self.vision.player_center(frame)
         center_x, center_y = player if player is not None else (fw // 2, fh // 2)
-        matches = self.vision.find_targets(frame, self.target_templates, center_x, center_y)
+        matches = self._find_mob_targets(frame, center_x, center_y)
         if matches:
             strongest = max(matches, key=lambda match: match["score"])
             print(f"[+] Live target matcher found a nameplate (score: {strongest['score']:.2f}).")
@@ -107,6 +108,7 @@ class RucoyBot:
         print(f"[+] Minimap template: {self.profile.minimap_template_key}")
         print(f"[+] Method: {'ADB Background Tap (Free Mouse)' if self.device.use_adb else 'Win32 Click'}")
         print(f"[+] Background: {'YES (Can stay behind other windows)' if self.device.use_adb else 'Window visible'}")
+        print(f"[+] Mob nameplate capture: {self.config.mob_detection_capture.upper()}")
         print(f"[+] Roaming: Registered minimap waypoints ({'enabled' if self.config.enable_minimap_walk else 'disabled'})")
         if self.combat_class in ("ranged", "magic"):
             print(
@@ -287,7 +289,7 @@ class RucoyBot:
                     state.ignored_stale_marker = None
             else:
                 state.ignored_stale_marker = None
-        mobs = self.vision.find_targets(frame, self.target_templates, cx, cy)
+        mobs = self._find_mob_targets(frame, cx, cy)
         if state.unconfirmed_target_position is not None:
             if now >= state.unconfirmed_target_until:
                 state.unconfirmed_target_position = None
@@ -681,7 +683,7 @@ class RucoyBot:
             if "nx" in target and "ny" in target
             else (tx, ty)
         )
-        matches = self.vision.find_targets(
+        matches = self._find_mob_targets(
             frame, self.target_templates, cx, cy,
             search_center=search_pt, search_radius=search_radius, include_deadzone=True,
         )
@@ -693,6 +695,95 @@ class RucoyBot:
         )
         distance = np.hypot(nearest["click_x"] - tx, nearest["click_y"] - ty)
         return nearest if distance <= match_radius else None
+
+    def _find_mob_targets(
+        self,
+        frame: np.ndarray,
+        center_x: int,
+        center_y: int,
+        *,
+        search_center: Optional[tuple[int, int]] = None,
+        search_radius: Optional[int] = None,
+        include_deadzone: bool = True,
+    ) -> list[TargetMatch]:
+        """Run nameplate matching on the configured source and return tap-frame coordinates."""
+        assert self.device is not None
+        source = self.config.mob_detection_capture
+        same_as_primary = (
+            (source == "adb" and self.device.use_adb)
+            or (source == "win32" and not self.device.use_adb)
+        )
+        detection_frame = frame if same_as_primary else self.device.capture_mob_detection()
+        if detection_frame is None:
+            if not self._mob_capture_warning_emitted:
+                print(
+                    f"[!] {source.upper()} mob capture is unavailable; "
+                    "falling back to the current input frame."
+                )
+                self._mob_capture_warning_emitted = True
+            detection_frame = frame
+
+        input_h, input_w = frame.shape[:2]
+        detect_h, detect_w = detection_frame.shape[:2]
+        input_aspect = input_w / max(1, input_h)
+        detect_aspect = detect_w / max(1, detect_h)
+        if abs(detect_aspect - input_aspect) / input_aspect > 0.01:
+            if not self._mob_capture_warning_emitted:
+                print(
+                    f"[!] {source.upper()} mob frame has a different aspect ratio "
+                    f"({detect_w}x{detect_h}); using the current input frame instead."
+                )
+                self._mob_capture_warning_emitted = True
+            detection_frame = frame
+            detect_h, detect_w = input_h, input_w
+
+        scale_x = detect_w / max(1, input_w)
+        scale_y = detect_h / max(1, input_h)
+        detect_center = (int(round(center_x * scale_x)), int(round(center_y * scale_y)))
+        detect_search_center = None
+        detect_search_radius = search_radius
+        if search_center is not None:
+            detect_search_center = (
+                int(round(search_center[0] * scale_x)),
+                int(round(search_center[1] * scale_y)),
+            )
+        if search_radius is not None:
+            detect_search_radius = int(round(search_radius * (scale_x + scale_y) / 2))
+
+        preferred_scale = None
+        if source == "win32":
+            # Nameplate templates are authored from the 1600px ADB framebuffer.
+            # Match at the window frame's actual scale instead of approximating
+            # it with one of the generic fallback scales.
+            preferred_scale = detect_w / 1600.0
+
+        matches = self.vision.find_targets(
+            detection_frame,
+            self.target_templates,
+            *detect_center,
+            search_center=detect_search_center,
+            search_radius=detect_search_radius,
+            include_deadzone=include_deadzone,
+            preferred_scale=preferred_scale,
+        )
+        if detection_frame is frame:
+            return matches
+
+        # The selected capture may have a different pixel size from the input
+        # backend. Convert all nameplate geometry back to input/tap coordinates.
+        map_x, map_y = input_w / max(1, detect_w), input_h / max(1, detect_h)
+        converted: list[TargetMatch] = []
+        for match in matches:
+            mapped = dict(match)
+            for key, factor in (("nx", map_x), ("nw", map_x), ("click_x", map_x)):
+                if key in mapped:
+                    mapped[key] = int(round(mapped[key] * factor))
+            for key, factor in (("ny", map_y), ("nh", map_y), ("click_y", map_y)):
+                if key in mapped:
+                    mapped[key] = int(round(mapped[key] * factor))
+            mapped["distance"] = float(np.hypot(mapped["click_x"] - center_x, mapped["click_y"] - center_y))
+            converted.append(mapped)
+        return converted
 
     def _approach_mob(
         self, frame: np.ndarray, target: TargetMatch, now: float,

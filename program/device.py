@@ -52,21 +52,37 @@ def _find_adb_port() -> int:
 class InputDevice:
     """Unified screen capture and tap interface used by the bot loop."""
 
-    def __init__(self, adb_path: Optional[str], serial: Optional[str], hwnd: Any, use_adb: bool):
+    def __init__(
+        self, adb_path: Optional[str], serial: Optional[str], hwnd: Any, use_adb: bool,
+        mob_capture_source: str = "adb",
+    ):
         self.adb_path = adb_path
         self.serial = serial
         self.hwnd = hwnd
         self.use_adb = use_adb
+        self.mob_capture_source = mob_capture_source
         self._raw_capture_supported: Optional[bool] = None
         self._mss: Any = None
 
     @classmethod
     def connect(cls, config: BotConfig) -> Optional["InputDevice"]:
-        if config.prefer_adb:
+        adb_path: Optional[str] = None
+        serial: Optional[str] = None
+        if config.prefer_adb or config.mob_detection_capture == "adb":
             adb_path, serial = cls._connect_adb()
+
+        if config.prefer_adb:
             if adb_path and serial:
+                hwnd = None
+                if config.mob_detection_capture == "win32":
+                    try:
+                        top, title = cls._find_window(config.window_title)
+                        hwnd = cls._find_game_child(top)
+                        print(f"[+] Found emulator window for Win32 mob capture: '{title}' (HWND: {hwnd})")
+                    except Exception as error:
+                        print(f"[!] Win32 mob capture unavailable; mob detection will use the ADB frame: {error}")
                 print("[+] MODE: ADB (100% True Background - No mouse takeover!)")
-                return cls(adb_path, serial, None, True)
+                return cls(adb_path, serial, hwnd, True, config.mob_detection_capture)
             print("[!] ADB unavailable. Falling back to Win32 window mode...")
 
         try:
@@ -74,7 +90,9 @@ class InputDevice:
             hwnd = cls._find_game_child(top)
             print(f"[+] Found emulator window: '{title}' (HWND: {hwnd})")
             print("[+] MODE: Win32 Window Fallback")
-            return cls(None, None, hwnd, False)
+            if config.mob_detection_capture == "adb" and (not adb_path or not serial):
+                print("[!] ADB mob capture unavailable; mob detection will use the Win32 frame.")
+            return cls(adb_path, serial, hwnd, False, config.mob_detection_capture)
         except Exception as error:
             print(f"[-] {error}")
             return None
@@ -163,46 +181,64 @@ class InputDevice:
 
     def capture(self) -> Optional[np.ndarray]:
         if self.use_adb:
-            try:
-                # BlueStacks returns a fixed-size RGBA framebuffer when the
-                # PNG flag is omitted.  Avoiding PNG compression/decompression
-                # saves roughly 100 ms per frame on the target emulator.
-                if self._raw_capture_supported is not False:
-                    result = subprocess.run(
-                        [self.adb_path, "-s", self.serial, "exec-out", "screencap"],
-                        capture_output=True, timeout=3,
-                    )
-                    raw = result.stdout
-                    if len(raw) >= 16:
-                        width, height, pixel_format, _ = np.frombuffer(raw[:16], dtype="<u4")
-                        expected_bytes = int(width) * int(height) * 4
-                        if pixel_format == 1 and len(raw) >= 16 + expected_bytes:
-                            self._raw_capture_supported = True
-                            rgba = np.frombuffer(raw, dtype=np.uint8, offset=16, count=expected_bytes)
-                            rgba = rgba.reshape((int(height), int(width), 4))
-                            return cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGR)
-                    self._raw_capture_supported = False
+            return self._capture_adb()
 
-                # Keep a PNG fallback for devices whose screencap command does
-                # not expose the raw RGBA format.
-                png = subprocess.run(
-                    [self.adb_path, "-s", self.serial, "exec-out", "screencap", "-p"],
+        return self._capture_win32(self.hwnd)
+
+    def capture_mob_detection(self) -> Optional[np.ndarray]:
+        """Capture using the selected mob matcher source, independently of tap input."""
+        if self.mob_capture_source == "adb":
+            return self._capture_adb()
+        if self.mob_capture_source == "win32":
+            return self._capture_win32(self.hwnd)
+        return None
+
+    def _capture_adb(self) -> Optional[np.ndarray]:
+        if not self.adb_path or not self.serial:
+            return None
+        try:
+            # BlueStacks returns a fixed-size RGBA framebuffer when the
+            # PNG flag is omitted.  Avoiding PNG compression/decompression
+            # saves roughly 100 ms per frame on the target emulator.
+            if self._raw_capture_supported is not False:
+                result = subprocess.run(
+                    [self.adb_path, "-s", self.serial, "exec-out", "screencap"],
                     capture_output=True, timeout=3,
                 )
-                if png.stdout:
-                    return cv2.imdecode(np.frombuffer(png.stdout, np.uint8), cv2.IMREAD_COLOR)
-            except (OSError, subprocess.SubprocessError):
-                pass
-            return None
+                raw = result.stdout
+                if len(raw) >= 16:
+                    width, height, pixel_format, _ = np.frombuffer(raw[:16], dtype="<u4")
+                    expected_bytes = int(width) * int(height) * 4
+                    if pixel_format == 1 and len(raw) >= 16 + expected_bytes:
+                        self._raw_capture_supported = True
+                        rgba = np.frombuffer(raw, dtype=np.uint8, offset=16, count=expected_bytes)
+                        rgba = rgba.reshape((int(height), int(width), 4))
+                        return cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGR)
+                self._raw_capture_supported = False
 
+            # Keep a PNG fallback for devices whose screencap command does
+            # not expose the raw RGBA format.
+            png = subprocess.run(
+                [self.adb_path, "-s", self.serial, "exec-out", "screencap", "-p"],
+                capture_output=True, timeout=3,
+            )
+            if png.stdout:
+                return cv2.imdecode(np.frombuffer(png.stdout, np.uint8), cv2.IMREAD_COLOR)
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return None
+
+    def _capture_win32(self, hwnd: Any) -> Optional[np.ndarray]:
+        if not hwnd:
+            return None
         try:
             import win32gui
 
-            left, top, right, bottom = win32gui.GetClientRect(self.hwnd)
+            left, top, right, bottom = win32gui.GetClientRect(hwnd)
             width, height = right - left, bottom - top
             if width <= 0 or height <= 0:
                 return None
-            screen_x, screen_y = win32gui.ClientToScreen(self.hwnd, (0, 0))
+            screen_x, screen_y = win32gui.ClientToScreen(hwnd, (0, 0))
             if self._mss is None:
                 from mss import MSS
                 self._mss = MSS()
