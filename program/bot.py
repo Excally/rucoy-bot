@@ -218,7 +218,7 @@ class RucoyBot:
             idle_duration = now - state.no_target_since
             if cfg.enable_minimap_walk and idle_duration >= cfg.minimap_idle_delay and now - state.last_minimap_time >= cfg.minimap_cooldown:
                 print(f"[~] No '{self.profile.target_name}' in vision for {idle_duration:.1f}s -> registering minimap waypoint...")
-                self.navigator.travel()
+                self._travel_with_melee_stuck_recovery()
                 state.last_minimap_time = time.monotonic()
                 state.no_target_since = state.last_minimap_time
         self._preview(frame, cx, cy)
@@ -432,34 +432,13 @@ class RucoyBot:
             print("[!] Exhausted travel failsafe skipped because minimap walking is disabled.")
             self._reset_exhaustion_streak()
             return
-        device = getattr(self, "device", None)
-        before_frame = device.capture() if device is not None else None
-
-        moved = self.navigator.travel(
+        moved = self._travel_with_melee_stuck_recovery(
             farthest=True,
             keep_open_seconds=max(0.0, cfg.exhausted_travel_hold_seconds),
         )
         state.last_minimap_time = time.monotonic()
         state.no_target_since = state.last_minimap_time
         self._reset_exhaustion_streak()
-
-        if device is not None and before_frame is not None:
-            time.sleep(0.5)
-            after_frame = device.capture()
-            screen_unchanged_fn = getattr(self.vision, "screen_unchanged", None)
-            is_unchanged = screen_unchanged_fn(before_frame, after_frame) if screen_unchanged_fn is not None else False
-            if after_frame is not None and is_unchanged:
-                print("[!] Player stayed in the same spot after exhausted travel.")
-                combat_class = getattr(self, "combat_class", "melee")
-                if combat_class == "melee":
-                    self._execute_melee_exhaustion_recovery()
-                    print("[+] Retrying exhausted travel after ranged power skill recovery...")
-                    moved = self.navigator.travel(
-                        farthest=True,
-                        keep_open_seconds=max(0.0, cfg.exhausted_travel_hold_seconds),
-                    )
-                    state.last_minimap_time = time.monotonic()
-                    state.no_target_since = state.last_minimap_time
 
         if moved:
             # The old screen coordinate belongs to the exhausted mob.  After
@@ -468,11 +447,44 @@ class RucoyBot:
         else:
             print("[!] Exhausted travel failsafe could not move; resuming normal scanning.")
 
-    def _execute_melee_exhaustion_recovery(self) -> None:
-        """Switch to ranged, fire power skill 4 times (1s interval) to clear blocking mobs, then switch back to melee."""
+    def _travel_with_melee_stuck_recovery(
+        self, *, farthest: bool = False, keep_open_seconds: float = 0.0,
+    ) -> bool:
+        """Retry minimap travel after ranged skill recovery if a melee trip made no progress."""
+        assert self.navigator is not None
+        device = getattr(self, "device", None)
+        is_melee = getattr(self, "combat_class", "melee") == "melee"
+        before_frame = device.capture() if device is not None and is_melee else None
+        travel_options = {
+            "farthest": farthest,
+            "keep_open_seconds": max(0.0, keep_open_seconds),
+        }
+        moved = self.navigator.travel(**travel_options)
+
+        if device is None or before_frame is None:
+            return moved
+
+        time.sleep(0.5)
+        after_frame = device.capture()
+        screen_unchanged_fn = getattr(self.vision, "screen_unchanged", None)
+        is_unchanged = (
+            screen_unchanged_fn(before_frame, after_frame)
+            if after_frame is not None and screen_unchanged_fn is not None
+            else False
+        )
+        if is_unchanged:
+            print("[!] Player stayed in the same spot after minimap travel.")
+            self._execute_melee_travel_recovery()
+            print("[+] Retrying minimap travel after ranged power skill recovery...")
+            moved = self.navigator.travel(**travel_options)
+
+        return moved
+
+    def _execute_melee_travel_recovery(self) -> None:
+        """Switch to ranged, fire power skill 4 times (1s interval), then switch back to melee."""
         assert self.device is not None
         cfg = self.config
-        print(f"[+] Melee exhaustion failsafe: switching to Ranged class at {cfg.class_ranged_tap}...")
+        print(f"[+] Melee minimap recovery: switching to Ranged class at {cfg.class_ranged_tap}...")
         self.device.click(*cfg.class_ranged_tap)
         time.sleep(0.5)
 
