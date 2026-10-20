@@ -684,7 +684,7 @@ class RucoyBot:
             else (tx, ty)
         )
         matches = self._find_mob_targets(
-            frame, self.target_templates, cx, cy,
+            frame, cx, cy,
             search_center=search_pt, search_radius=search_radius, include_deadzone=True,
         )
         if not matches:
