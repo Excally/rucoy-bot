@@ -466,7 +466,7 @@ class RucoyBot:
         if device is None or before_frame is None:
             return moved
 
-        time.sleep(0.5)
+        time.sleep(1.8)
         after_frame = device.capture()
         screen_unchanged_fn = getattr(self.vision, "screen_unchanged", None)
         is_unchanged = (

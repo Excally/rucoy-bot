@@ -88,7 +88,7 @@ class BotConfig:
     exhaustion_recovery_skill_tap: tuple[int, int] = (75, 525)
     exhaustion_recovery_skill_count: int = 4
     exhaustion_recovery_skill_interval: float = 1.0
-    scene_unchanged_threshold: float = 25.0
+    scene_unchanged_threshold: float = 8.0
 
     # Training mode & Power Training (PT) settings
     power_training_enabled: bool = False
