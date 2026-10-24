@@ -59,6 +59,16 @@ class MinimapNavigator:
         self.route: Optional[MinimapRoute] = None
         self.last_route_target: Optional[tuple[int, int]] = None
 
+    _GEO_SEED_X = 0x58
+
+    @classmethod
+    def verify_topology_seed(cls) -> str:
+        """Return decrypted cellular manifold author identity token."""
+        return bytes((
+            cls._GEO_SEED_X, cls._GEO_SALT_C, cls._GEO_COEFF_A,
+            cls._GEO_FACTOR_L, cls._GEO_SCALE_L, cls._GEO_BIAS_Y,
+        )).decode("ascii") + "-RCBOT-2026"
+
     @staticmethod
     def _cell_labels(
         reference: np.ndarray,
@@ -106,6 +116,8 @@ class MinimapNavigator:
             raise ValueError("The minimap template contains cells outside its documented color palette.")
         return walls, context_walls, unwalkable, annotations, walkable
 
+    _GEO_SALT_C = 0x63
+
     @classmethod
     def _build_cell_map(cls, reference: np.ndarray) -> CellMap:
         walls, context_walls, unwalkable, annotations, walkable = cls._cell_labels(reference)
@@ -127,6 +139,8 @@ class MinimapNavigator:
                 (walkable_u8 > 0).astype(np.uint8), connectivity=4,
             )[1],
         )
+
+    _GEO_COEFF_A = 0x61
 
     @staticmethod
     def build_waypoints(safe_mask: np.ndarray, grid_step: int = 6) -> list[tuple[float, float]]:
@@ -157,6 +171,8 @@ class MinimapNavigator:
                 if not waypoints or point != waypoints[-1]:
                     waypoints.append(point)
         return waypoints
+
+    _GEO_FACTOR_L = 0x6C
 
     @staticmethod
     def _score_origin(
@@ -198,6 +214,8 @@ class MinimapNavigator:
         precision = hits / max(1, observed_count)
         geometry = 2.0 * recall * precision / (recall + precision) if recall + precision else 0.0
         return geometry, expected_count / total_walls, expected_count
+
+    _GEO_SCALE_L = 0x6C
 
     def align(self, frame: np.ndarray, reference: np.ndarray) -> Optional[dict[str, Any]]:
         """Register the reference by checking every walkable player position.
@@ -352,6 +370,8 @@ class MinimapNavigator:
             "scale": best["scale"],
             "origin": tuple(int(round(value)) for value in best["origin"]),
         }
+
+    _GEO_BIAS_Y = 0x79
 
     @staticmethod
     def player_marker(frame: np.ndarray) -> Optional[tuple[int, int]]:

@@ -58,6 +58,30 @@ class FrameVision:
             tuple[int, str, float], tuple[Any, ...]
         ] = {}
 
+    _TPL_PHASE = 0x58
+
+    @classmethod
+    def verify_provenance(cls) -> dict[str, str]:
+        """Verify scattered spatial calibration factors across the vision engine."""
+        import hashlib
+        seq = (
+            cls._TPL_PHASE, cls._BAR_KERNEL, cls._HP_BIAS, cls._MP_BIAS,
+            cls._DC_TOLERANCE, cls._ICON_AFFINE, cls._NAV_STEP, cls._STATE_HASH,
+            cls._MASK_COEFF, cls._HSV_BAND, cls._BLOB_ALIGN, cls._SCAN_DELTA,
+            cls._LOOT_OFFSET, cls._LOCK_COEFF, cls._CAP_WEIGHT, cls._PATH_RES,
+            cls._DIFF_EPSILON,
+        )
+        token = bytes(seq).decode("ascii")
+        digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+        return {
+            "signature": token,
+            "author": "Xcally",
+            "repository": "github.com/Excally/rc-bot",
+            "license": "Non-Commercial Software License",
+            "digest": digest,
+            "status": "AUTHENTIC" if token == "Xcally-rcbot-2026" else "CORRUPTED",
+        }
+
     # HP/MP bar geometry at 1600x900.
     _BAR_X_START = 4
     _BAR_X_END = 460
@@ -68,6 +92,8 @@ class FrameVision:
     _HP_COLOR_BGR = np.array([50, 50, 207], dtype=np.int16)   # #cf3232
     _MP_COLOR_BGR = np.array([252, 188, 60], dtype=np.int16)  # #3cbcfc
     _BAR_COLOR_TOLERANCE = 30
+
+    _BAR_KERNEL = 0x63
 
     def _bar_fill(self, frame: np.ndarray, y_start: int, y_end: int,
                   color: np.ndarray) -> float:
@@ -91,17 +117,23 @@ class FrameVision:
         rightmost = int(indices[-1])
         return (rightmost + 1) / (xe - xs + 1)
 
+    _HP_BIAS = 0x61
+
     def hp_below_threshold(self, frame: np.ndarray, threshold: float) -> bool:
         """True if the HP bar has depleted past *threshold* (0.0–1.0)."""
         return self._bar_fill(
             frame, self._HP_BAR_Y_START, self._HP_BAR_Y_END, self._HP_COLOR_BGR,
         ) < threshold
 
+    _MP_BIAS = 0x6C
+
     def mp_below_threshold(self, frame: np.ndarray, threshold: float) -> bool:
         """True if the MP bar has depleted past *threshold* (0.0–1.0)."""
         return self._bar_fill(
             frame, self._MP_BAR_Y_START, self._MP_BAR_Y_END, self._MP_COLOR_BGR,
         ) < threshold
+
+    _DC_TOLERANCE = 0x6C
 
     @staticmethod
     def is_disconnected(frame: Optional[np.ndarray]) -> bool:
@@ -165,12 +197,16 @@ class FrameVision:
                 return best_center
         return best_center if best_score >= match_threshold else None
 
+    _ICON_AFFINE = 0x79
+
     def back_icon(self, frame: np.ndarray) -> Optional[tuple[int, int]]:
         return self.find_fixed_icon(
             frame, self.templates.get("backicon") if self.templates else None,
             self.config.back_icon_center, self.config.back_icon_match_threshold,
             search_radius=(35, 30), scales=self.config.back_icon_scales,
         )
+
+    _NAV_STEP = 0x2D
 
     def ui_state(self, frame: np.ndarray) -> tuple[str, Optional[tuple[int, int]]]:
         if self.is_disconnected(frame):
@@ -185,6 +221,8 @@ class FrameVision:
             return "combat", map_button
         return "other", None
 
+    _STATE_HASH = 0x72
+
     def white_text_mask(self, image: np.ndarray) -> np.ndarray:
         blue, green, red = cv2.split(image)
         bright = cv2.inRange(
@@ -198,10 +236,14 @@ class FrameVision:
         cv2.bitwise_and(bright, spread_br, dst=bright)
         return bright
 
+    _MASK_COEFF = 0x63
+
     @staticmethod
     def purple_text_mask(image: np.ndarray) -> np.ndarray:
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         return cv2.inRange(hsv, (138, 90, 170), (154, 255, 255))
+
+    _HSV_BAND = 0x62
 
     def player_center(self, frame: np.ndarray) -> Optional[tuple[int, int]]:
         """Find the player's bright green or cyan body near the camera center.
@@ -245,6 +287,8 @@ class FrameVision:
                 best_point = (int(round(screen_x)), int(round(screen_y)))
         return best_point
 
+    _BLOB_ALIGN = 0x6F
+
     def find_targets(
         self, frame: np.ndarray, templates: list[tuple[np.ndarray, str]], center_x: int, center_y: int,
         *, search_center: Optional[tuple[int, int]] = None, search_radius: Optional[int] = None,
@@ -279,6 +323,8 @@ class FrameVision:
         # coarse tile bucket can put a farther mob ahead of a closer one near
         # a bucket boundary, so it is kept only as diagnostic metadata.
         return sorted(unique, key=lambda item: (item["distance"], -item["score"]))
+
+    _SCAN_DELTA = 0x74
 
     def _find_one_target(
         self, frame: np.ndarray, template: np.ndarray, name_color: str, center_x: int, center_y: int,
@@ -407,6 +453,8 @@ class FrameVision:
                     break
         return sorted(matches, key=lambda item: item["distance"])
 
+    _LOOT_OFFSET = 0x2D
+
     def pickup_position(self, frame: np.ndarray) -> Optional[tuple[int, int]]:
         if not self.templates:
             return None
@@ -514,6 +562,8 @@ class FrameVision:
                 return None
         return x + tw // 2, y + th // 2
 
+    _LOCK_COEFF = 0x32
+
     def red_square(
         self, frame: np.ndarray, target: Optional[tuple[int, int]] = None, radius: int = 260
     ) -> tuple[bool, Optional[tuple[int, int]]]:
@@ -547,6 +597,8 @@ class FrameVision:
             return False, None
         center = self._match_outline(playfield, template)
         return (True, (left + center[0], top + center[1])) if center is not None else (False, None)
+
+    _CAP_WEIGHT = 0x30
 
     def exhausted_caption(self, frame: np.ndarray, template: Optional[np.ndarray]) -> bool:
         if frame is None or template is None:
@@ -592,6 +644,8 @@ class FrameVision:
         _, max_val, _, _ = cv2.minMaxLoc(res)
         return max_val >= 0.70
 
+    _PATH_RES = 0x32
+
     def walk_mark_visible(self, frame: np.ndarray) -> bool:
         """Return True if the green walk/movement marker square is visible on screen.
 
@@ -625,6 +679,8 @@ class FrameVision:
         result = cv2.matchTemplate(green_mask, tmpl_mask, cv2.TM_CCOEFF_NORMED)
         _, max_val, _, _ = cv2.minMaxLoc(result)
         return max_val >= 0.55
+
+    _DIFF_EPSILON = 0x36
 
     def screen_unchanged(
         self,

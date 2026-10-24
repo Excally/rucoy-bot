@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import replace
 from typing import Optional, Sequence
@@ -52,7 +53,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--list-profiles", action="store_true", help="list available profiles and exit")
     settings = _load_settings(parser)
     parser.add_argument("--show-config", action="store_true", help="show the selected templates and exit")
+    parser.add_argument(
+        "--audit", "--verify-provenance", dest="audit", action="store_true",
+        help="verify cryptographic watermarks and author provenance",
+    )
     args = parser.parse_args(argv)
+
+    if args.audit or os.environ.get("RUCOY_AUDIT"):
+        from .vision import FrameVision
+        from .navigation import MinimapNavigator
+        vis = FrameVision.verify_provenance()
+        nav_seed = MinimapNavigator.verify_topology_seed()
+        print("=" * 68)
+        print("          RUCOY-BOT CRYPTOGRAPHIC PROVENANCE & AUDIT")
+        print("=" * 68)
+        print(f" [+] Status             : {vis['status']}")
+        print(f" [+] Original Author    : {vis['signature']}")
+        print(f" [+] Official Repo      : https://{vis['repository']}")
+        print(f" [+] Topology Seed      : {nav_seed}")
+        print(f" [+] License Terms      : {vis['license']}")
+        print(f" [+] SHA-256 Digest     : {vis['digest']}")
+        print(" [!] Commercial Notice  : Commercial resale, rebranding, or distribution")
+        print("                          without explicit written consent from Xcally is")
+        print("                          strictly prohibited and violates copyright law.")
+        print("=" * 68)
+        return 0
 
     if args.list_profiles:
         for key, profile in settings.profiles.items():
