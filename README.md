@@ -294,4 +294,8 @@ pytest tests/
 
 ## License and Disclaimer
 
-This software is developed strictly for educational and automation research purposes. Automating gameplay may violate the Terms of Service of Rucoy Online. Use at your own discretion.
+This project is licensed under the **Non-Commercial Software License** — see the [LICENSE](LICENSE) file for details.
+
+- **Non-Commercial Use Only**: You are free to use, modify, and study this software for personal and educational purposes.
+- **No Sale or Monetization**: You may **not** sell, sublicense, charge fees for, or commercially exploit this software, source code, or compiled binaries without prior written consent from the author (**Xcally**).
+- **Disclaimer**: Automating gameplay may violate the Terms of Service of Rucoy Online. The software is provided "as is" for research purposes; use at your own discretion.
