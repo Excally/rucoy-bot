@@ -2,19 +2,30 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
+from .config import get_app_dir
+
+
 
 
 def _resolve_profile_file() -> Path:
-    exe_dir = Path(sys.executable).resolve().parent
-    if (exe_dir / "zone_profiles.json").is_file():
-        return exe_dir / "zone_profiles.json"
+    app_dir = get_app_dir()
+    if (app_dir / "zone_profiles.json").is_file():
+        return app_dir / "zone_profiles.json"
+
+    cwd_candidate = Path.cwd() / "zone_profiles.json"
+    if cwd_candidate.is_file():
+        return cwd_candidate
+
     return Path(__file__).resolve().parent.parent / "zone_profiles.json"
 
 
 PROFILE_FILE = _resolve_profile_file()
+
 
 
 @dataclass(frozen=True)
@@ -47,9 +58,10 @@ def _template_key(value: object, field_name: str, profile_key: str) -> str:
     return key
 
 
-def load_profile_settings(path: Path = PROFILE_FILE) -> ProfileSettings:
+def load_profile_settings(path: Optional[Path] = None) -> ProfileSettings:
     """Load profiles from JSON and validate all configured template keys."""
-    data = json.loads(path.read_text(encoding="utf-8"))
+    target_path = path if path is not None else _resolve_profile_file()
+    data = json.loads(target_path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError("The profile file must contain a JSON object.")
     raw_profiles = data.get("profiles")

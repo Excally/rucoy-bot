@@ -95,10 +95,10 @@ class RucoyBot:
 
     def _print_startup(self) -> None:
         assert self.device is not None
-        print(f"\n[+] 🥋 Training Profile: '{self.profile.key}'")
+        print(f"\n[+] Training Profile: '{self.profile.key}'")
         print(f"[+] Target Mob: '{self.profile.target_name}'")
         print(f"[+] Training Skill: {self.combat_class.upper()}")
-        mode_str = "POWER TRAINING (⚡ Special Ability Spam)" if self.config.power_training_enabled else "NORMAL AFK (⏱️ Skill Tick Training)"
+        mode_str = "POWER TRAINING (Special Ability Spam)" if self.config.power_training_enabled else "NORMAL AFK (Skill Tick Training)"
         print(f"[+] Training Mode: {mode_str}")
         if self.config.power_training_enabled:
             print(f"[+] Special Interval: {self.config.special_skill_cooldown:.1f}s (Min MP: {int(self.config.special_skill_min_mp * 100)}%)")
@@ -707,15 +707,17 @@ class RucoyBot:
         include_deadzone: bool = True,
     ) -> list[TargetMatch]:
         """Run nameplate matching on the configured source and return tap-frame coordinates."""
-        assert self.device is not None
-        source = self.config.mob_detection_capture
+        source = getattr(self.config, "mob_detection_capture", "adb") if hasattr(self, "config") else "adb"
+        device = getattr(self, "device", None)
+        use_adb = getattr(device, "use_adb", True) if device is not None else True
         same_as_primary = (
-            (source == "adb" and self.device.use_adb)
-            or (source == "win32" and not self.device.use_adb)
+            (source == "adb" and use_adb)
+            or (source == "win32" and not use_adb)
         )
-        detection_frame = frame if same_as_primary else self.device.capture_mob_detection()
+        capture_func = getattr(device, "capture_mob_detection", None) if device is not None else None
+        detection_frame = frame if (same_as_primary or capture_func is None) else capture_func()
         if detection_frame is None:
-            if not self._mob_capture_warning_emitted:
+            if not getattr(self, "_mob_capture_warning_emitted", False):
                 print(
                     f"[!] {source.upper()} mob capture is unavailable; "
                     "falling back to the current input frame."
@@ -757,14 +759,19 @@ class RucoyBot:
             # it with one of the generic fallback scales.
             preferred_scale = detect_w / 1600.0
 
+        scan_kwargs = {
+            "search_center": detect_search_center,
+            "search_radius": detect_search_radius,
+            "include_deadzone": include_deadzone,
+        }
+        if preferred_scale is not None:
+            scan_kwargs["preferred_scale"] = preferred_scale
+
         matches = self.vision.find_targets(
             detection_frame,
             self.target_templates,
             *detect_center,
-            search_center=detect_search_center,
-            search_radius=detect_search_radius,
-            include_deadzone=include_deadzone,
-            preferred_scale=preferred_scale,
+            **scan_kwargs,
         )
         if detection_frame is frame:
             return matches
@@ -803,9 +810,9 @@ class RucoyBot:
         walk_visible = self.vision.walk_mark_visible(frame)
 
         if walk_visible:
-            # Player is in motion — let the game handle movement; do not click.
+            # Player is in motion - let the game handle movement; do not click.
             if not state.approach_walking:
-                print("[~] Walk mark detected; approaching mob — holding position clicks.")
+                print("[~] Walk mark detected; approaching mob - holding position clicks.")
             state.approach_walking = True
             return
 
@@ -816,7 +823,7 @@ class RucoyBot:
             return
 
         if state.approach_walking:
-            print("[~] Walk mark gone; player stopped — clicking closer to mob.")
+            print("[~] Walk mark gone; player stopped - clicking closer to mob.")
         else:
             # First approach click right after initial mob tap.
             print("[~] No walk mark yet; sending initial approach click.")

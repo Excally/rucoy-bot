@@ -40,7 +40,7 @@ class LauncherDialog:
         self.saved_cfg = load_user_settings()
 
         self.root = tk.Tk()
-        self.root.title("Rucoy Online — AFK Training Bot")
+        self.root.title("Rucoy Online - AFK Training Bot")
         self.root.geometry("640x700")
         self.root.resizable(False, False)
 
@@ -81,7 +81,7 @@ class LauncherDialog:
         cfg = self.saved_cfg
         self.profile_keys = list(self.settings.profiles.keys())
         self.profile_display_names = [
-            f"{k} — {self.settings.profiles[k].target_name}"
+            f"{k} - {self.settings.profiles[k].target_name}"
             for k in self.profile_keys
         ]
 
@@ -168,7 +168,7 @@ class LauncherDialog:
 
         title_lbl = tk.Label(
             title_row,
-            text="🥋 RUCOY TRAINING BOT",
+            text="RUCOY TRAINING BOT",
             font=("Segoe UI", 15, "bold"),
             bg=self.header_bg,
             fg=self.accent_blue,
@@ -200,11 +200,11 @@ class LauncherDialog:
         tab_bar.pack(fill="x")
 
         self.tabs = [
-            ("profile", "🎯 Training"),
-            ("pt", "⚡ Power Train"),
-            ("potions", "🧪 Potions"),
-            ("stamina", "🛡️ Stamina"),
-            ("system", "⚙️ System"),
+            ("profile", "Training"),
+            ("pt", "Power Train"),
+            ("potions", "Potions"),
+            ("stamina", "Stamina"),
+            ("system", "System"),
         ]
 
         self.tab_buttons: dict[str, tk.Button] = {}
@@ -245,7 +245,7 @@ class LauncherDialog:
         # Left status indicator
         self.status_lbl = tk.Label(
             footer,
-            text="● Ready (Background ADB Mode)",
+            text="[Ready] (Background ADB Mode)",
             font=("Segoe UI", 9),
             bg=self.card_bg,
             fg=self.accent_green,
@@ -255,7 +255,7 @@ class LauncherDialog:
         # Right buttons
         self.start_btn = tk.Button(
             footer,
-            text="🚀 Start Training Bot",
+            text="Start Training Bot",
             font=("Segoe UI", 11, "bold"),
             bg=self.accent_green,
             fg="#0b0f19",
@@ -271,7 +271,7 @@ class LauncherDialog:
 
         self.save_btn = tk.Button(
             footer,
-            text="💾 Save Config",
+            text="Save Config",
             font=("Segoe UI", 9),
             bg=self.card_inner,
             fg=self.fg_color,
@@ -287,7 +287,7 @@ class LauncherDialog:
 
         self.load_btn = tk.Button(
             footer,
-            text="📂 Load Config",
+            text="Load Config",
             font=("Segoe UI", 9),
             bg=self.card_inner,
             fg=self.fg_color,
@@ -335,7 +335,7 @@ class LauncherDialog:
         self.tab_frames["profile"] = f
 
         # Target Mob Profile
-        card1 = self._create_card(f, "🎯 Target Mob & Training Zone")
+        card1 = self._create_card(f, "Target Mob & Training Zone")
         card1.pack(fill="x", pady=(0, 10))
 
         prof_label = tk.Label(card1, text="Mob Profile:", font=("Segoe UI", 9, "bold"), bg=self.card_bg, fg=self.fg_color)
@@ -354,16 +354,16 @@ class LauncherDialog:
         self.combobox.bind("<<ComboboxSelected>>", self._on_profile_changed)
 
         # Training Class / Skill
-        card2 = self._create_card(f, "⚔️ Training Skill & Weapon Class")
+        card2 = self._create_card(f, "Training Skill & Weapon Class")
         card2.pack(fill="x", pady=(0, 10))
 
         radio_row = tk.Frame(card2, bg=self.card_bg)
         radio_row.pack(fill="x", padx=14, pady=10)
 
         classes = [
-            ("melee", "⚔️ Melee (Knight)\nAuto-walks in-game"),
-            ("ranged", "🏹 Distance (Archer)\nAuto-steps into range"),
-            ("magic", "🔮 Magic (Mage)\nAuto-steps into range"),
+            ("melee", "Melee (Knight)\nAuto-walks in-game"),
+            ("ranged", "Distance (Archer)\nAuto-steps into range"),
+            ("magic", "Magic (Mage)\nAuto-steps into range"),
         ]
 
         for val, label in classes:
@@ -385,7 +385,7 @@ class LauncherDialog:
             rb.pack(side="left", expand=True, fill="x", padx=4)
 
         # Training Mode & Mob Rotation
-        card3 = self._create_card(f, "⏱️ Training Mode & Mob Rotation")
+        card3 = self._create_card(f, "Training Mode & Mob Rotation")
         card3.pack(fill="x", pady=(0, 10))
 
         mode_row = tk.Frame(card3, bg=self.card_bg)
@@ -393,7 +393,7 @@ class LauncherDialog:
 
         tk.Radiobutton(
             mode_row,
-            text="⏱️ Normal AFK (Tick training with training weapon)",
+            text="Normal AFK (Tick training with training weapon)",
             value="normal",
             variable=self.training_mode_var,
             font=("Segoe UI", 9),
@@ -405,7 +405,7 @@ class LauncherDialog:
 
         tk.Radiobutton(
             mode_row,
-            text="⚡ Power Training / PT (Special skill spam with mana)",
+            text="Power Training / PT (Special skill spam with mana)",
             value="power",
             variable=self.training_mode_var,
             font=("Segoe UI", 9),
@@ -421,7 +421,7 @@ class LauncherDialog:
         tk.Label(rot_row, text="Max time per mob (anti-exhaust rotation):", font=("Segoe UI", 9), bg=self.card_bg, fg=self.fg_dim).pack(side="left")
         self.rot_combo = ttk.Combobox(
             rot_row,
-            values=["0 — Unlimited (until dead/exhausted)", "30 — Switch every 30s", "45 — Switch every 45s", "60 — Switch every 60s", "90 — Switch every 90s", "120 — Switch every 120s"],
+            values=["0 - Unlimited (until dead/exhausted)", "30 - Switch every 30s", "45 - Switch every 45s", "60 - Switch every 60s", "90 - Switch every 90s", "120 - Switch every 120s"],
             state="readonly",
             width=32,
             font=("Segoe UI", 9),
@@ -451,7 +451,7 @@ class LauncherDialog:
         f = tk.Frame(self.tab_container, bg=self.bg_color)
         self.tab_frames["pt"] = f
 
-        card = self._create_card(f, "⚡ Power Training (PT) Configuration")
+        card = self._create_card(f, "Power Training (PT) Configuration")
         card.pack(fill="x", pady=(0, 10))
 
         desc = tk.Label(
@@ -526,10 +526,10 @@ class LauncherDialog:
         # Note Card
         note = tk.Frame(f, bg=self.card_inner, highlightbackground=self.border_color, highlightthickness=1, padx=14, pady=10)
         note.pack(fill="x")
-        tk.Label(note, text="💡 PT Class Mechanics:", font=("Segoe UI", 9, "bold"), bg=self.card_inner, fg=self.accent_blue).pack(anchor="w")
+        tk.Label(note, text="PT Class Mechanics:", font=("Segoe UI", 9, "bold"), bg=self.card_inner, fg=self.accent_blue).pack(anchor="w")
         tk.Label(
             note,
-            text="• Knight: Whirlwind / Spinning Slash taps top button (1545, 632)\n• Archer: Multi-Arrow Spread taps middle button (1545, 736)\n• Mage: Area Burst Spell taps bottom button (1545, 840)\nThe bot automatically targets the correct button for your active class.",
+            text="- Knight: Whirlwind / Spinning Slash taps top button (1545, 632)\n- Archer: Multi-Arrow Spread taps middle button (1545, 736)\n- Mage: Area Burst Spell taps bottom button (1545, 840)\nThe bot automatically targets the correct button for your active class.",
             font=("Segoe UI", 9),
             bg=self.card_inner,
             fg=self.fg_dim,
@@ -541,7 +541,7 @@ class LauncherDialog:
         f = tk.Frame(self.tab_container, bg=self.bg_color)
         self.tab_frames["potions"] = f
 
-        card = self._create_card(f, "🧪 Vitals & Auto-Potion Sustain")
+        card = self._create_card(f, "Vitals & Auto-Potion Sustain")
         card.pack(fill="x", pady=(0, 10))
 
         # Master toggle
@@ -637,7 +637,7 @@ class LauncherDialog:
         f = tk.Frame(self.tab_container, bg=self.bg_color)
         self.tab_frames["stamina"] = f
 
-        card = self._create_card(f, "🛡️ Stamina & Exhaustion Management")
+        card = self._create_card(f, "Stamina & Exhaustion Management")
         card.pack(fill="x", pady=(0, 10))
 
         tk.Label(
@@ -689,7 +689,7 @@ class LauncherDialog:
 
         self.streak_combo = ttk.Combobox(
             streak_row,
-            values=["1 — Move after 1 exhausted mob", "2 — Move after 2 consecutive exhausted mobs", "3 — Move after 3 consecutive exhausted mobs"],
+            values=["1 - Move after 1 exhausted mob", "2 - Move after 2 consecutive exhausted mobs", "3 - Move after 3 consecutive exhausted mobs"],
             state="readonly",
             width=36,
             font=("Segoe UI", 9),
@@ -701,7 +701,7 @@ class LauncherDialog:
         self.streak_combo.bind("<<ComboboxSelected>>", self._on_streak_changed)
 
         # Roaming Card
-        card_roam = self._create_card(f, "🗺️ Navigation & Loot")
+        card_roam = self._create_card(f, "Navigation & Loot")
         card_roam.pack(fill="x")
 
         tk.Checkbutton(
@@ -729,7 +729,7 @@ class LauncherDialog:
         f = tk.Frame(self.tab_container, bg=self.bg_color)
         self.tab_frames["system"] = f
 
-        card = self._create_card(f, "⚙️ Engine & Display Settings")
+        card = self._create_card(f, "Engine & Display Settings")
         card.pack(fill="x", pady=(0, 10))
 
         tk.Checkbutton(
@@ -781,7 +781,7 @@ class LauncherDialog:
         ).pack(anchor="w", padx=14, pady=(0, 10))
 
         # Preset management
-        card_p = self._create_card(f, "💾 Settings Persistence")
+        card_p = self._create_card(f, "Settings Persistence")
         card_p.pack(fill="x")
 
         tk.Label(
@@ -799,7 +799,7 @@ class LauncherDialog:
 
         save_p_btn = tk.Button(
             btn_row,
-            text="💾 Save Current Settings as Default",
+            text="Save Current Settings as Default",
             font=("Segoe UI", 9, "bold"),
             bg=self.card_inner,
             fg=self.accent_blue,
@@ -815,7 +815,7 @@ class LauncherDialog:
 
         load_p_btn = tk.Button(
             btn_row,
-            text="📂 Load Saved Config",
+            text="Load Saved Config",
             font=("Segoe UI", 9),
             bg=self.card_inner,
             fg=self.fg_color,
@@ -831,7 +831,7 @@ class LauncherDialog:
 
         reset_btn = tk.Button(
             btn_row,
-            text="🔄 Reset to Defaults",
+            text="Reset to Defaults",
             font=("Segoe UI", 9),
             bg=self.card_inner,
             fg=self.fg_dim,
@@ -913,13 +913,13 @@ class LauncherDialog:
 
         class_desc = ""
         if c_class == "melee":
-            class_desc = "• Melee: Character walks directly adjacent via in-game pathfinding."
+            class_desc = "- Melee: Character walks directly adjacent via in-game pathfinding."
         elif c_class == "ranged":
-            class_desc = "• Distance (Archer): Bot auto-approaches target until in range (<100px) then fires."
+            class_desc = "- Distance (Archer): Bot auto-approaches target until in range (<100px) then fires."
         elif c_class == "magic":
-            class_desc = "• Magic (Mage): Bot auto-approaches target until in range (<100px) then casts."
+            class_desc = "- Magic (Mage): Bot auto-approaches target until in range (<100px) then casts."
 
-        mode_desc = "• Mode: ⚡ Power Training (PT) active — special ability cast every cooldown." if is_pt else "• Mode: ⏱️ Normal AFK tick training with training weapon."
+        mode_desc = "- Mode: Power Training (PT) active - special ability cast every cooldown." if is_pt else "- Mode: Normal AFK tick training with training weapon."
         self.info_mechanic_lbl.config(text=f"{class_desc}\n{mode_desc}")
 
     def _build_config(self) -> BotConfig:
@@ -1068,7 +1068,7 @@ class LauncherDialog:
         ok = self._save_current_settings()
         path_name = resolve_user_settings_path().name
         if ok:
-            self.status_lbl.config(text=f"✓ Settings saved to {path_name}", fg=self.accent_blue)
+            self.status_lbl.config(text=f"[OK] Settings saved to {path_name}", fg=self.accent_blue)
         else:
             self.status_lbl.config(text=f"! Could not save settings to {path_name}", fg=self.accent_rose)
 
@@ -1078,7 +1078,7 @@ class LauncherDialog:
         if cfg:
             self.saved_cfg = cfg
             self._apply_settings_dict(cfg)
-            self.status_lbl.config(text=f"✓ Settings loaded from {path_name}", fg=self.accent_blue)
+            self.status_lbl.config(text=f"[OK] Settings loaded from {path_name}", fg=self.accent_blue)
         else:
             self.status_lbl.config(text=f"! No saved settings found in {path_name}", fg=self.accent_amber)
 
@@ -1104,7 +1104,7 @@ class LauncherDialog:
             "mob_detection_capture": "adb",
         }
         self._apply_settings_dict(defaults)
-        self.status_lbl.config(text="✓ Reset to recommended training defaults", fg=self.accent_green)
+        self.status_lbl.config(text="[OK] Reset to recommended training defaults", fg=self.accent_green)
 
     def _on_start(self) -> None:
         idx = self.combobox.current()

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import sys
 
@@ -98,33 +99,96 @@ class BotConfig:
     auto_pickup_enabled: bool = True
 
 
+def _is_temp_directory(path: Path) -> bool:
+    try:
+        import tempfile
+        temp_dir = Path(tempfile.gettempdir()).resolve()
+        resolved = path.resolve()
+        return (
+            resolved == temp_dir
+            or resolved.is_relative_to(temp_dir)
+            or "onefile_" in str(resolved).lower()
+        )
+    except Exception:
+        path_str = str(path).lower()
+        return "temp" in path_str or "onefile_" in path_str
+
+
+def get_app_dir() -> Path:
+    """Resolve the real directory containing the executable or source project.
+
+    In Nuitka onefile mode, sys.executable points to an ephemeral unpacked
+    executable inside the system Temp folder (%TEMP%\\onefile_...).
+    This function detects the original launcher directory using Nuitka's
+    compiled metadata (__compiled__.containing_dir or original_argv0),
+    ensuring configuration and templates persist next to the user's .exe.
+    """
+    # 1. Nuitka compiled function metadata (__compiled__.containing_dir or original_argv0)
+    compiled_info = getattr(get_app_dir, "__compiled__", None)
+    if compiled_info is not None:
+        containing_dir = getattr(compiled_info, "containing_dir", None)
+        if containing_dir:
+            cand = Path(containing_dir).resolve()
+            if cand.is_dir() and not _is_temp_directory(cand):
+                return cand
+        orig_argv0 = getattr(compiled_info, "original_argv0", None)
+        if orig_argv0:
+            cand = Path(orig_argv0).resolve().parent
+            if cand.is_dir() and not _is_temp_directory(cand):
+                return cand
+
+    # 2. Check environment variables if set
+    for env_var in ("NUITKA_ONEFILE_DIRECTORY", "NUITKA_ORIGINAL_ARGV0", "APP_DIR"):
+        val = os.environ.get(env_var)
+        if val:
+            cand = Path(val).resolve()
+            if cand.is_file():
+                cand = cand.parent
+            if cand.is_dir() and not _is_temp_directory(cand):
+                return cand
+
+    # 3. Check sys.argv[0] if running a compiled .exe
+    if sys.argv and sys.argv[0]:
+        try:
+            argv_cand = Path(sys.argv[0]).resolve()
+            if argv_cand.is_file() and argv_cand.suffix.lower() == ".exe":
+                cand_dir = argv_cand.parent
+                if not _is_temp_directory(cand_dir):
+                    return cand_dir
+        except Exception:
+            pass
+
+    # 4. Check sys.executable if frozen outside a temp directory
+    is_frozen = getattr(sys, "frozen", False) or not sys.executable.lower().endswith(("python.exe", "pythonw.exe"))
+    if is_frozen:
+        exe_dir = Path(sys.executable).resolve().parent
+        if not _is_temp_directory(exe_dir):
+            return exe_dir
+
+    # 5. Check current working directory if user config or profile files exist there
+    cwd = Path.cwd()
+    if (cwd / "training_settings.json").is_file() or (cwd / "zone_profiles.json").is_file():
+        return cwd
+
+    # 6. Fallback to repository root
+    return Path(__file__).resolve().parent.parent
+
+
 def _resolve_template_dir() -> Path:
-    exe_dir = Path(sys.executable).resolve().parent
-    if (exe_dir / "templates").is_dir():
-        return exe_dir / "templates"
+    app_dir = get_app_dir()
+    if (app_dir / "templates").is_dir():
+        return app_dir / "templates"
+
+    cwd_candidate = Path.cwd() / "templates"
+    if cwd_candidate.is_dir():
+        return cwd_candidate
+
     return Path(__file__).resolve().parent.parent / "templates"
 
 
 def resolve_user_settings_path() -> Path:
-    # When packaged as a standalone executable (e.g. Nuitka or PyInstaller):
-    # sys.executable points to the .exe file itself (e.g. C:\path\to\bot.exe).
-    is_frozen = getattr(sys, "frozen", False) or not sys.executable.lower().endswith(("python.exe", "pythonw.exe"))
-    if is_frozen:
-        exe_dir = Path(sys.executable).resolve().parent
-        return exe_dir / "training_settings.json"
-
-    # When running from source via python:
-    # Check repository root or current working directory
-    repo_root = Path(__file__).resolve().parent.parent
-    candidate = repo_root / "training_settings.json"
-    if candidate.is_file():
-        return candidate
-
-    cwd_candidate = Path.cwd() / "training_settings.json"
-    if cwd_candidate.is_file():
-        return cwd_candidate
-
-    return candidate
+    app_dir = get_app_dir()
+    return app_dir / "training_settings.json"
 
 
 def load_user_settings() -> dict:
@@ -132,7 +196,9 @@ def load_user_settings() -> dict:
     if path.is_file():
         try:
             import json
-            return json.loads(path.read_text(encoding="utf-8"))
+            data = json.loads(path.read_text(encoding="utf-8"))
+            print(f"[+] Loaded training settings from {path}")
+            return data
         except Exception as e:
             print(f"[!] Could not read training settings from {path}: {e}")
             return {}
@@ -143,7 +209,9 @@ def load_user_settings() -> dict:
     if embedded.is_file() and embedded != path:
         try:
             import json
-            return json.loads(embedded.read_text(encoding="utf-8"))
+            data = json.loads(embedded.read_text(encoding="utf-8"))
+            print("[+] Loaded default training settings from embedded bundle")
+            return data
         except Exception:
             pass
 
@@ -156,6 +224,7 @@ def save_user_settings(data: dict) -> bool:
         import json
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        print(f"[+] Saved training settings to {path}")
         return True
     except Exception as e:
         print(f"[!] Could not save training settings to {path}: {e}")
@@ -164,3 +233,4 @@ def save_user_settings(data: dict) -> bool:
 
 CONFIG = BotConfig()
 TEMPLATE_DIR = _resolve_template_dir()
+

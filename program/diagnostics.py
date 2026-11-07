@@ -70,7 +70,13 @@ class TimestampedOutputStream:
     def _write_line(self, line: str, ending: str) -> None:
         raw_line = line.rstrip("\r")
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        self.stream.write(f"[{timestamp}] {raw_line}{ending}")
+        text = f"[{timestamp}] {raw_line}{ending}"
+        try:
+            self.stream.write(text)
+        except UnicodeEncodeError:
+            encoding = getattr(self.stream, "encoding", None) or "utf-8"
+            fallback = text.encode(encoding, errors="replace").decode(encoding)
+            self.stream.write(fallback)
         if self.guard is not None:
             self.guard.observe(raw_line)
 

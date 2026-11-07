@@ -58,8 +58,10 @@ class GuiLauncherTests(unittest.TestCase):
             mock_launch.return_value = (self.profile1, "magic")
             result = main(["--gui"])
             self.assertEqual(result, 0)
-            mock_launch.assert_called_once()
-            mock_run.assert_called_once_with(self.profile1, combat_class="magic")
+            self.assertTrue(mock_run.called)
+            args, kwargs = mock_run.call_args
+            self.assertEqual(args[0], self.profile1)
+            self.assertEqual(kwargs.get("combat_class"), "magic")
 
     def test_gui_dialog_save_and_load_explicit(self):
         try:

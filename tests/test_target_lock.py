@@ -36,7 +36,7 @@ class _LockedEntityVision:
         self.matches = matches
         self.scan_options = None
 
-    def find_targets(self, frame, templates, center_x, center_y, *, search_center, search_radius, include_deadzone):
+    def find_targets(self, frame, templates, center_x, center_y, *, search_center, search_radius, include_deadzone, preferred_scale=None, **kwargs):
         self.scan_options = (center_x, center_y, search_center, search_radius, include_deadzone)
         return self.matches
 

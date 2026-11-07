@@ -36,12 +36,20 @@ This release replaces that with a **walk-mark detection loop** that reads the ga
 
 ---
 
+### 4. Executable Configuration Persistence (Standalone / Onefile)
+- **App Directory Resolution**: Implemented `get_app_dir()` to accurately resolve the persistent application folder next to `bot.exe` using Nuitka compiled metadata (`__compiled__.containing_dir`).
+- **Persistent Settings**: User settings are now saved to and loaded directly from `training_settings.json` located next to `bot.exe` instead of ephemeral extraction directories.
+- **Embedded Fallback**: If no user configuration exists on first launch, default settings are loaded from the bundled payload and written out on save.
+
+---
+
 ## Verification and Checksums
 
-| File | Size | Description |
-|---|---|---|
-| `release/bot.exe` | 51,521,536 bytes | Standalone one-file Windows executable (Python 3.14 / Nuitka 4.2.2) |
-| `release/RucoyBot-Release.zip` | 51,634,790 bytes | Complete distribution bundle with assets and templates |
+| File | Size (Bytes) | SHA-256 Checksum | Description |
+|---|---|---|---|
+| `release/bot.exe` | 52,127,232 bytes | `0E68F13776AE7E80071D595BF3198B758F6F5F2A4683B7A207769B34BA10ABB1` | Standalone one-file Windows executable (Python 3.14 / Nuitka 4.2.2 / Console + Tkinter enabled) |
+| `release/RucoyBot-Release.zip` | 52,288,940 bytes | `127CEFB3B7C73E43BA2C76812DF574271C9DE87B715C834AF61DCF764402A932` | Complete distribution bundle with bot.exe, training_settings.json, zone_profiles.json, and templates |
+
 
 ---
 
