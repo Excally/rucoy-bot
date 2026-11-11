@@ -13,11 +13,11 @@ The bot interfaces with an emulator running Rucoy Online using either direct ADB
 - **True Background Operation**: Communicates directly through local ADB socket commands (`input tap`), eliminating mouse cursor hijacking and allowing the emulator window to remain completely in the background or behind other applications.
 - **Computer Vision Targeting**: Identifies mob nametags using multi-scale template matching with color tolerance filtering and distance prioritization relative to the character.
 - **Selectable Mob Capture**: Mob nametags can be matched from the ADB framebuffer or a Win32 emulator-window capture. This setting applies only to mob nameplates; other screen checks and all taps keep their configured input backend.
-- **Combat Lock State Machine**: Monitors the exact in-game red target diamond/square (`marked.png`) to verify engagement before holding combat actions, preventing missed clicks or accidental map traversal.
+- **Combat Lock State Machine**: Monitors the in-game red target marker (`marked.png`) before holding combat actions. If the full-screen search misses a marker partly hidden by a mob sprite, acquisition retries around the nearest nameplate and accepts a verified partial border; a marker on a different mob cannot override nearest-first selection.
 - **Multi-Class Combat Support**: Full support for Melee, Ranged, and Magic classes, including automated approach logic for ranged combatants until target lock is verified.
 - **Power Training (PT)**: Automatic execution of class-specific special abilities based on configurable cooldown timers and minimum mana reserve thresholds.
 - **Anti-Exhaustion Management**: Detects in-game mob exhaustion captions, with support for immediate mob switching, timed confirmation periods, maximum engagement timers per mob, and escape-path minimap roaming.
-- **Cellular Minimap Navigation**: An alignment and routing engine based on a 21x21 pixel logical grid that aligns the live in-game minimap against zone master templates to navigate between waypoints.
+- **Cellular Minimap Navigation**: An alignment and routing engine based on a 21x21 pixel logical grid. Before sending any movement tap, it requires a perfect `1.0` wall-geometry score, a distinct best alignment, sufficient visible reference coverage, and a walkable player cell. Uncertain or clipped views are rejected without tapping.
 - **Automated Potion Management**: Scans pixel-level fill levels of the character HP and MP bars with numeric text overlay tolerance, supporting standard PvE and low-latency PvP response intervals.
 - **Auto-Looting**: Detects ground loot availability upon target defeat and collects dropped items prior to seeking the next target.
 - **Fault Recovery**: Detects disconnection screens and automatically triggers reconnection, recovers from unintended UI dialogs, and features a watchdog for repeated warning patterns.
@@ -68,8 +68,8 @@ The project is structured as a modular Python package located in the `program/` 
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/Excally/rc-bot.git
-   cd rc-bot
+   git clone https://github.com/Excally/rucoy-bot.git
+   cd rucoy-bot
    ```
 
 2. **Create and activate a virtual environment:**
@@ -243,11 +243,12 @@ Every master minimap reference image must be formatted in solid BGR cell blocks:
 ### Pathfinding Logic
 
 1. When idle without targets for longer than `minimap_idle_delay`, the bot taps the minimap icon.
-2. The current visible minimap viewport is captured and matched against the master template using normalized cross-correlation.
+2. The cyan player marker anchors an exhaustive search over walkable reference cells. Candidate placements are scored by comparing visible white wall cells with the master map and refining the strongest alignments.
 3. The player position is localized within the cellular coordinate grid.
 4. A safety clearance mask (1-cell dilation of all obstacles) prevents clicks near walls.
-5. The bot dispatches a movement tap to an unvisited waypoint or the farthest safe node if in exhaustion failsafe mode.
-6. The minimap is closed to allow combat scanning to resume.
+5. A movement tap is allowed only when geometry scores exactly `1.0`, the best candidate is separated from the next candidate by at least `0.025`, at least `30,000` reference pixels are visible, visible reference coverage is at least `20%`, and the player cell is walkable. If any check fails, the bot closes the map without sending a waypoint tap.
+6. The bot dispatches a movement tap to an unvisited waypoint or the farthest safe node if in exhaustion failsafe mode.
+7. The minimap is closed to allow combat scanning to resume.
 
 ---
 
@@ -286,6 +287,10 @@ pytest tests/
 - Confirm your emulator resolution is set to `1600 x 900`.
 - Verify that the active profile in `zone_profiles.json` matches your current training dungeon.
 - Check template availability in `templates/` (e.g., `zombie_lv65.png`, `skeleton_lv75.png`).
+
+### Minimap Movement Is Rejected
+- Check the bot log for the failed alignment checks. It will not tap a waypoint unless the map geometry score is exactly `1.0` and the alignment, coverage, and player-cell checks also pass.
+- A clipped or ambiguous minimap view can be rejected, including near map edges. The bot closes the map without sending a movement tap; capture and compare the rejected frame before changing the safety threshold.
 
 ### Clicks Register But Mouse Does Not Move
 - When running in ADB mode (default), the bot sends commands directly to the Android OS via `input tap`. The Windows mouse cursor will intentionally remain untouched.
