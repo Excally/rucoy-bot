@@ -20,9 +20,9 @@ class BotConfig:
     minimap_min_click_distance: float = 100
     minimap_max_click_distance: float = 260
     minimap_align_min_gap: float = 0.025
-    # Partial views can score below 0.40; coverage and candidate separation
-    # provide additional safeguards for this lower geometry threshold.
-    minimap_geometry_min_score: float = 0.25
+    # Movement is accepted only for a perfect map geometry match. A wrong
+    # minimap tap can send the player to an unknown location.
+    minimap_geometry_min_score: float = 1.0
     # The map overlay is drawn over a changing game scene, so raw grayscale
     # template scores are not reliable.  Require a meaningful amount of the
     # reference linework to be visible before accepting geometry-only matches.

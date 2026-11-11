@@ -591,7 +591,7 @@ class FrameVision:
                     template,
                     threshold=0.40,
                     expected_center=(tx - x1, ty - y1),
-                    anchor_radius=max(40, int(radius * 0.55)),
+                    anchor_radius=max(40, int(radius)),
                 )
                 if center is not None:
                     return True, (x1 + center[0], y1 + center[1])

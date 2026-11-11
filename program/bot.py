@@ -276,6 +276,7 @@ class RucoyBot:
         state, cfg = self.state, self.config
         has_red, position = (False, None)
         marker_checked = False
+        ignored_marker_at_check = state.ignored_stale_marker
         if state.idle_mark_check_needed or now >= state.next_idle_mark_check_at:
             has_red, position = self.vision.red_square(frame)
             marker_checked = True
@@ -287,8 +288,6 @@ class RucoyBot:
                     has_red = False
                 else:
                     state.ignored_stale_marker = None
-            else:
-                state.ignored_stale_marker = None
         mobs = self._find_mob_targets(frame, cx, cy)
         if state.unconfirmed_target_position is not None:
             if now >= state.unconfirmed_target_until:
@@ -311,20 +310,47 @@ class RucoyBot:
         # distance ties, so a farther but sharper nameplate cannot win.
         best = mobs[0]
         bx, by = best["click_x"], best["click_y"]
+        marked_position = None
         if has_red and position is not None:
             marker_gap = np.hypot(position[0] - bx, position[1] - by)
             if marker_gap <= cfg.target_reacquire_radius:
+                marked_position = position
+        local_position = None
+        if marked_position is None and marker_checked:
+            local_has_red, local_position = self.vision.red_square(
+                frame, (bx, by), radius=int(cfg.target_reacquire_radius)
+            )
+            if local_has_red:
+                marked_position = local_position
+
+        if marker_checked and ignored_marker_at_check is not None:
+            if marked_position is not None:
+                stale_gap = np.hypot(
+                    marked_position[0] - ignored_marker_at_check[0],
+                    marked_position[1] - ignored_marker_at_check[1],
+                )
+                if stale_gap < 140:
+                    marked_position = None
+                else:
+                    state.ignored_stale_marker = None
+            elif position is None and local_position is None:
                 state.ignored_stale_marker = None
-                print(f"[*] Detected marked.png on the nearest Skeleton at ({position[0]}, {position[1]}); adopting target...")
-                best["click_x"], best["click_y"] = position
-                best["last_entity_check"], best["last_entity_seen_time"] = now, now
-                state.current_target = best
-                state.target_click_time = now
-                state.confirmed_locked = True
-                state.mob_training_started_at = now
-                return
-            # An exact mark on a farther/unknown mob must not override the
-            # nearest-nameplate rule while starting or recovering the bot.
+
+        if marked_position is not None:
+            state.ignored_stale_marker = None
+            print(
+                f"[*] Detected marked.png on the nearest {self.profile.target_name} "
+                f"at ({marked_position[0]}, {marked_position[1]}); adopting target..."
+            )
+            best["click_x"], best["click_y"] = marked_position
+            best["last_entity_check"], best["last_entity_seen_time"] = now, now
+            state.current_target = best
+            state.target_click_time = now
+            state.confirmed_locked = True
+            state.mob_training_started_at = now
+            return
+        # Only the nearest visible mob can be adopted; a mark on another mob
+        # must not override the nearest-first acquisition rule.
         if not self.device.click(bx, by):
             state.no_target_since = now
             print(f"[!] Could not tap the selected {self.profile.target_name} at ({bx}, {by}); retrying detection.")

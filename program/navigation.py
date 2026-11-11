@@ -342,9 +342,10 @@ class MinimapNavigator:
             self.config.minimap_min_visible_reference_pixels / (MAP_CELL_PIXELS ** 2)
         )))
         failed_checks: list[str] = []
-        if best["geometry"] < self.config.minimap_geometry_min_score:
+        required_geometry = max(1.0, self.config.minimap_geometry_min_score)
+        if best["geometry"] < required_geometry:
             failed_checks.append(
-                f"map {best['geometry']:.3f} < {self.config.minimap_geometry_min_score:.3f}"
+                f"map {best['geometry']:.3f} < {required_geometry:.3f}"
             )
         if gap < self.config.minimap_align_min_gap:
             failed_checks.append(f"gap {gap:.3f} < {self.config.minimap_align_min_gap:.3f}")
