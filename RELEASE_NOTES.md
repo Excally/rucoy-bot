@@ -1,9 +1,27 @@
-# Release Notes - v2.2.0
+# Release Notes
 
-## Release Title
-`v2.2.0 - Ranged/Magic Walk-Mark Approach System`
+## v2.3.0 - Targeting and Minimap Reliability
+
+Release date: 2026-11-13
+
+### Changes
+
+- Added selectable mob nameplate capture with ADB or Win32 (`--mob-capture`).
+- Improved target lock detection and reacquisition behavior, including the nearest-nameplate retry when the marker is partly obscured.
+- Fixed mob reacquisition argument handling and improved travel spot-change detection.
+- Tightened minimap alignment checks and recovery behavior so uncertain or clipped map geometry is rejected before movement taps.
+
+### Windows release artifacts
+
+| File | Size (bytes) | SHA-256 |
+|---|---:|---|
+| `RucoyBot-v2.3.0.exe` | 51,472,896 | `D2115D608DF040815F83474E2E2480E9E2395EA42EEAB0B2B62E19C943C599AE` |
+| `RucoyBot-v2.3.0-Windows.zip` | 51,429,105 | `D2E1AEB11C4743DDDC4EB91049A61F6233500D542E34C15D825D256B2FFDB1C2` |
+
+The EXE is a one-file Windows build made with Python 3.14, Nuitka 4.2.2, and Zig 0.17.1. It embeds the default templates and zone profiles. The ZIP adds the README, license, editable zone profiles, templates, and a clean empty settings file. Nuitka reported that Windows Runtime DLLs are not bundled and must be available on the target Windows installation.
 
 ---
+## v2.2.0 - Ranged/Magic Walk-Mark Approach System
 
 ## Overview
 
