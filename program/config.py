@@ -50,6 +50,8 @@ class BotConfig:
     idle_mark_check_interval: float = 1.0
     target_position_refresh_interval: float = 0.10
     target_reacquire_radius: float = 90
+    # Ranged and Magic only use the melee approach gesture beyond this radius.
+    ranged_magic_engage_radius_px: int = 300
     # Do not trust a lingering red outline after the target nameplate vanishes.
     target_entity_loss_timeout: float = 1.5
     # Release quickly when the exact marker disappears; a surviving nameplate
@@ -79,11 +81,13 @@ class BotConfig:
 
     # Training class
     combat_class: str = "melee"
+    ignore_purple_named_mobs: bool = False
 
     # Class selector buttons
     class_melee_tap: tuple[int, int] = (1550, 630)
     class_ranged_tap: tuple[int, int] = (1550, 730)
     class_magic_tap: tuple[int, int] = (1550, 830)
+    melee_approach_switch_delay: float = 0.1
 
     # Exhaustion recovery settings (melee unstuck routine)
     exhaustion_recovery_skill_tap: tuple[int, int] = (75, 525)

@@ -239,6 +239,54 @@ class TargetLockTests(unittest.TestCase):
         self.assertEqual(local_center, (x + tw // 2, y + th // 2))
         self.assertIsNone(global_center)
 
+    def test_magic_target_lock_flicks_melee_to_initiate_walk_mark(self):
+        bot = RucoyBot.__new__(RucoyBot)
+        bot.config = BotConfig(melee_approach_switch_delay=0.01)
+        bot.combat_class = "magic"
+        bot.device = _ClickRecorder()
+        bot.state = BotState(
+            current_target={"click_x": 500, "click_y": 500, "red_observations": 1, "red_last_seen": 1.0},
+            confirmed_locked=False,
+        )
+        bot.vision = _MarkerVision(marker_visible=True)
+        bot._update_target(np.zeros((900, 1600, 3), dtype=np.uint8), 800, 450, 1.1)
+
+        self.assertEqual(
+            bot.device.clicks,
+            [bot.config.class_melee_tap, bot.config.class_magic_tap],
+        )
+
+    def test_ranged_target_lock_flicks_melee_to_initiate_walk_mark(self):
+        bot = RucoyBot.__new__(RucoyBot)
+        bot.config = BotConfig(melee_approach_switch_delay=0.01)
+        bot.combat_class = "ranged"
+        bot.device = _ClickRecorder()
+        bot.state = BotState(
+            current_target={"click_x": 500, "click_y": 500, "red_observations": 1, "red_last_seen": 1.0},
+            confirmed_locked=False,
+        )
+        bot.vision = _MarkerVision(marker_visible=True)
+        bot._update_target(np.zeros((900, 1600, 3), dtype=np.uint8), 800, 450, 1.1)
+
+        self.assertEqual(
+            bot.device.clicks,
+            [bot.config.class_melee_tap, bot.config.class_ranged_tap],
+        )
+
+    def test_melee_target_lock_does_not_flick_class_switch(self):
+        bot = RucoyBot.__new__(RucoyBot)
+        bot.config = BotConfig(melee_approach_switch_delay=0.01)
+        bot.combat_class = "melee"
+        bot.device = _ClickRecorder()
+        bot.state = BotState(
+            current_target={"click_x": 500, "click_y": 500, "red_observations": 1, "red_last_seen": 1.0},
+            confirmed_locked=False,
+        )
+        bot.vision = _MarkerVision(marker_visible=True)
+        bot._update_target(np.zeros((900, 1600, 3), dtype=np.uint8), 800, 450, 1.1)
+
+        self.assertEqual(bot.device.clicks, [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -99,6 +99,9 @@ class LauncherDialog:
         initial_profile = self.settings.profiles[self.profile_keys[active_idx]]
         initial_class = (saved_class or initial_profile.combat_class or "melee").lower()
         self.class_var = tk.StringVar(value=initial_class)
+        self.ignore_purple_mob_var = tk.BooleanVar(
+            value=bool(cfg.get("ignore_purple_named_mobs", False))
+        )
 
         self.training_mode_var = tk.StringVar(value=cfg.get("training_mode", "normal"))
         self.max_time_var = tk.StringVar(value=str(int(cfg.get("max_mob_train_seconds", 0))))
@@ -177,7 +180,7 @@ class LauncherDialog:
 
         badge_lbl = tk.Label(
             title_row,
-            text=" AFK Optimizer v2.2 ",
+            text=" AFK Optimizer v2.3.2 ",
             font=("Segoe UI", 8, "bold"),
             bg=self.card_inner,
             fg=self.accent_green,
@@ -383,6 +386,18 @@ class LauncherDialog:
                 command=self._on_class_changed,
             )
             rb.pack(side="left", expand=True, fill="x", padx=4)
+
+        tk.Checkbutton(
+            card2,
+            text="Ignore purple named mob",
+            variable=self.ignore_purple_mob_var,
+            font=("Segoe UI", 9),
+            bg=self.card_bg,
+            fg=self.fg_color,
+            selectcolor=self.card_inner,
+            activebackground=self.card_bg,
+            activeforeground=self.accent_blue,
+        ).pack(anchor="w", padx=18, pady=(0, 10))
 
         # Training Mode & Mob Rotation
         card3 = self._create_card(f, "Training Mode & Mob Rotation")
@@ -915,9 +930,9 @@ class LauncherDialog:
         if c_class == "melee":
             class_desc = "- Melee: Character walks directly adjacent via in-game pathfinding."
         elif c_class == "ranged":
-            class_desc = "- Distance (Archer): Bot auto-approaches target until in range (<100px) then fires."
+            class_desc = "- Distance (Archer): Briefly switches to Melee beyond 300px, then clicks the marked target once if still far."
         elif c_class == "magic":
-            class_desc = "- Magic (Mage): Bot auto-approaches target until in range (<100px) then casts."
+            class_desc = "- Magic (Mage): Briefly switches to Melee beyond 300px, then clicks the marked target once if still far."
 
         mode_desc = "- Mode: Power Training (PT) active - special ability cast every cooldown." if is_pt else "- Mode: Normal AFK tick training with training weapon."
         self.info_mechanic_lbl.config(text=f"{class_desc}\n{mode_desc}")
@@ -930,6 +945,7 @@ class LauncherDialog:
             enable_minimap_walk=self.minimap_walk_var.get(),
             auto_pickup_enabled=self.auto_pickup_var.get(),
             combat_class=self.class_var.get(),
+            ignore_purple_named_mobs=self.ignore_purple_mob_var.get(),
             # Power Training
             power_training_enabled=self.pt_enabled_var.get(),
             special_skill_cooldown=round(self.pt_interval_var.get(), 2),
@@ -964,6 +980,8 @@ class LauncherDialog:
         if saved_class and saved_class.lower() in {"melee", "ranged", "magic", "mage"}:
             c_val = "magic" if saved_class.lower() == "mage" else saved_class.lower()
             self.class_var.set(c_val)
+        if "ignore_purple_named_mobs" in cfg:
+            self.ignore_purple_mob_var.set(bool(cfg["ignore_purple_named_mobs"]))
 
         # 3. Training mode & PT
         if "training_mode" in cfg:
@@ -1043,6 +1061,7 @@ class LauncherDialog:
         payload = {
             "active_profile": active_prof,
             "combat_class": self.class_var.get(),
+            "ignore_purple_named_mobs": self.ignore_purple_mob_var.get(),
             "training_mode": self.training_mode_var.get(),
             "power_training_enabled": self.pt_enabled_var.get(),
             "special_skill_cooldown": round(self.pt_interval_var.get(), 2),
@@ -1085,6 +1104,7 @@ class LauncherDialog:
     def _on_reset_defaults(self) -> None:
         defaults = {
             "training_mode": "normal",
+            "ignore_purple_named_mobs": False,
             "max_mob_train_seconds": 0.0,
             "power_training_enabled": False,
             "special_skill_cooldown": 2.0,

@@ -15,11 +15,6 @@
       "target_name": "Skeleton Warrior Lv.90",
       "name_template": "skeleton_warrior_lv90",
       "minimap_template": "minimap-skeleton-2-layout"
-    },
-    "zombie-any": {
-      "target_name": "Zombie (Any Level)",
-      "name_template": "zombie",
-      "minimap_template": "minimap-zombie-layout"
     }
   }
 }

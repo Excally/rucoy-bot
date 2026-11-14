@@ -13,6 +13,7 @@ class TargetMatch(TypedDict, total=False):
     distance: float
     score: float
     scale: float
+    name_color: str
     last_entity_check: float
     last_entity_seen_time: float
     red_loss_since: Optional[float]

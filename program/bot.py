@@ -33,6 +33,8 @@ class RucoyBot:
         self.combat_class = (
             combat_class or getattr(profile, "combat_class", "melee") or "melee"
         ).lower()
+        if self.combat_class == "mage":
+            self.combat_class = "magic"
         self.templates = TemplateStore()
         self.device: Optional[InputDevice] = None
         self.vision = FrameVision(config, self.templates)
@@ -42,7 +44,8 @@ class RucoyBot:
         self._mob_capture_warning_emitted = False
 
     def start(self) -> bool:
-        images = self.templates.load(self.profile.template_keys)
+        purple_template_key = f"purple_name_{self.profile.target_template_key}"
+        images = self.templates.load((*self.profile.template_keys, purple_template_key))
         exact = images.get(self.profile.target_template_key)
         if exact is None:
             print(
@@ -57,6 +60,22 @@ class RucoyBot:
             )
             return False
         self.target_templates = [(exact, "white")]
+        purple_template = images.get(purple_template_key)
+        if purple_template is None:
+            # The glyph geometry is the same when a mob name turns purple.
+            # Recolor the white template's detected text mask so the filter
+            # also works for profiles without a separately captured variant.
+            purple_mask = self.vision.white_text_mask(exact)
+            if cv2.countNonZero(purple_mask) > 0:
+                purple_template = np.zeros_like(exact)
+                purple_template[purple_mask > 0] = (255, 0, 255)
+        if purple_template is not None:
+            self.target_templates.append((purple_template, "purple"))
+        elif self.config.ignore_purple_named_mobs:
+            print(
+                f"[!] Could not build a purple nameplate mask from "
+                f"'{self.profile.target_template_key}'; purple targets cannot be filtered."
+            )
         self.device = InputDevice.connect(self.config)
         if self.device is None:
             return False
@@ -112,10 +131,15 @@ class RucoyBot:
         print(f"[+] Roaming: Registered minimap waypoints ({'enabled' if self.config.enable_minimap_walk else 'disabled'})")
         if self.combat_class in ("ranged", "magic"):
             print(
-                "[+] Class auto-approach: ON (approaching mob until red mark acquired, then hold position)"
+                f"[+] Class auto-approach: ON (melee approach beyond "
+                f"{self._ranged_magic_engage_radius_px():.0f}px; then waiting for marked target)"
             )
         else:
             print("[+] Class auto-approach: OFF (melee auto-walks in-game)")
+        print(
+            "[+] Purple named mobs: "
+            f"{'ignored' if self.config.ignore_purple_named_mobs else 'allowed'}"
+        )
         print(
             f"[+] Minimap alignment limits: map>={self.config.minimap_geometry_min_score:.2f}, "
             f"coverage>={self.config.minimap_min_visible_reference_fraction:.2f}, "
@@ -348,6 +372,16 @@ class RucoyBot:
             state.target_click_time = now
             state.confirmed_locked = True
             state.mob_training_started_at = now
+            if (
+                self.combat_class in ("magic", "ranged")
+                and self._target_outside_engage_radius(marked_position, cx, cy)
+            ):
+                self._trigger_melee_approach_trick()
+                if self.device.click(*marked_position):
+                    print("[+] Re-clicked the marked target after the melee approach.")
+                else:
+                    print("[!] Follow-up click on the marked target failed.")
+            state.approach_followup_click_pending = False
             return
         # Only the nearest visible mob can be adopted; a mark on another mob
         # must not override the nearest-first acquisition rule.
@@ -366,9 +400,12 @@ class RucoyBot:
         state.mob_training_started_at = 0.0
         state.idle_mark_check_needed = False
         state.no_target_since = now
-        # Reset approach state whenever a fresh target is selected.
-        state.approach_walking = False
-        state.approach_click_time = 0.0
+        state.approach_followup_click_pending = (
+            self.combat_class in ("magic", "ranged")
+            and self._target_outside_engage_radius((bx, by), cx, cy)
+        )
+        if state.approach_followup_click_pending:
+            self._trigger_melee_approach_trick()
 
     def _check_exhausted_caption(self, frame: np.ndarray, now: float) -> None:
         state, cfg = self.state, self.config
@@ -528,6 +565,23 @@ class RucoyBot:
         self.device.click(*cfg.class_melee_tap)
         time.sleep(0.5)
 
+    def _trigger_melee_approach_trick(self) -> None:
+        """Briefly switch to Melee to approach a distant target, then restore training class."""
+        if self.device is None:
+            return
+        cfg = self.config
+        is_magic = self.combat_class in ("magic", "mage")
+        return_tap = cfg.class_magic_tap if is_magic else cfg.class_ranged_tap
+        class_name = "Mage" if is_magic else "Ranged"
+        delay = getattr(cfg, "melee_approach_switch_delay", 0.1)
+
+        print(f"[+] Switching to Melee at {cfg.class_melee_tap} to approach distant target...")
+        self.device.click(*cfg.class_melee_tap)
+        time.sleep(delay)
+        print(f"[+] Switching back to {class_name} class at {return_tap}...")
+        self.device.click(*return_tap)
+        time.sleep(0.05)
+
     def _reset_exhaustion_streak(self) -> None:
         self.state.consecutive_exhausted = 0
         self.state.exhausted_window_started_at = None
@@ -565,10 +619,14 @@ class RucoyBot:
                     return
                 state.confirmed_locked = True
                 state.mob_training_started_at = now
-                # Clear approach state: we have a red lock now.
-                state.approach_walking = False
-                state.approach_click_time = 0.0
                 print(f"[*] Target locked with red square! Training at ({tx}, {ty})...")
+                if state.approach_followup_click_pending:
+                    state.approach_followup_click_pending = False
+                    if self._target_outside_engage_radius((tx, ty), cx, cy):
+                        if self.device.click(tx, ty):
+                            print("[+] Re-clicked the marked target after the melee approach.")
+                        else:
+                            print("[!] Follow-up click on the marked target failed.")
 
             # Max mob training duration safeguard (rotates mobs before exhaustion)
             if (
@@ -632,13 +690,7 @@ class RucoyBot:
         if state.exhausted_caption_check_at is not None:
             return
 
-        # For ranged/magic: use walk-mark detection to throttle approach clicks
-        # instead of spamming movement every frame.
-        if self.combat_class in ("ranged", "magic"):
-            self._approach_mob(frame, target, now)
-            return
-
-        # Refresh entity position if nameplate is still visible while walking up to mob.
+        # Keep the selected nameplate current while waiting for marked.png.
         refresh_interval = max(0.05, cfg.target_position_refresh_interval)
         if now - target.get("last_entity_check", 0.0) >= refresh_interval:
             target["last_entity_check"] = now
@@ -799,6 +851,8 @@ class RucoyBot:
             *detect_center,
             **scan_kwargs,
         )
+        if getattr(self.config, "ignore_purple_named_mobs", False):
+            matches = [match for match in matches if match.get("name_color") != "purple"]
         if detection_frame is frame:
             return matches
 
@@ -818,48 +872,16 @@ class RucoyBot:
             converted.append(mapped)
         return converted
 
-    def _approach_mob(
-        self, frame: np.ndarray, target: TargetMatch, now: float,
-    ) -> None:
-        """Ranged/magic approach: walk toward the mob only when the player has stopped.
+    def _ranged_magic_engage_radius_px(self) -> float:
+        return max(0.0, float(getattr(self.config, "ranged_magic_engage_radius_px", 300)))
 
-        After the initial mob tap, the game shows a green walk-mark square while
-        the character is walking.  We check for that mark:
-          - Walk mark visible  → player is already walking; do nothing, wait.
-          - Walk mark gone     → player stopped (arrived or stuck); click near
-                                 the mob body to step closer, then wait again.
-
-        This replaces the old click-every-frame spam for ranged/magic classes.
-        """
-        assert self.device is not None
-        state = self.state
-        walk_visible = self.vision.walk_mark_visible(frame)
-
-        if walk_visible:
-            # Player is in motion - let the game handle movement; do not click.
-            if not state.approach_walking:
-                print("[~] Walk mark detected; approaching mob - holding position clicks.")
-            state.approach_walking = True
-            return
-
-        # Walk mark gone: player stopped moving (or first frame after tap).
-        # Only re-click if enough time has passed to avoid instant re-spam.
-        min_interval = 0.7  # seconds between approach re-clicks
-        if now - state.approach_click_time < min_interval:
-            return
-
-        if state.approach_walking:
-            print("[~] Walk mark gone; player stopped - clicking closer to mob.")
-        else:
-            # First approach click right after initial mob tap.
-            print("[~] No walk mark yet; sending initial approach click.")
-
-        tx, ty = target["click_x"], target["click_y"]
-        if self.device.click(tx, ty):
-            state.approach_walking = False   # reset; will go True when mark appears
-            state.approach_click_time = now
-        else:
-            print(f"[!] Approach click failed at ({tx}, {ty}); will retry.")
+    def _target_outside_engage_radius(
+        self, target_position: tuple[int, int], player_x: int, player_y: int,
+    ) -> bool:
+        return np.hypot(
+            target_position[0] - player_x,
+            target_position[1] - player_y,
+        ) > self._ranged_magic_engage_radius_px()
 
 
     def _check_potions(self, frame: np.ndarray, now: float) -> None:

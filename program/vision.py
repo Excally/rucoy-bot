@@ -321,9 +321,18 @@ class FrameVision:
         # White and purple versions can describe the same nametag.
         unique: list[TargetMatch] = []
         for candidate in sorted(matches, key=lambda item: item["distance"]):
-            if any(abs(candidate["nx"] - item["nx"]) < 30 and abs(candidate["ny"] - item["ny"]) < 15 for item in unique):
-                continue
-            unique.append(candidate)
+            duplicate = next((
+                item for item in unique
+                if abs(candidate["nx"] - item["nx"]) < 30
+                and abs(candidate["ny"] - item["ny"]) < 15
+            ), None)
+            if duplicate is None:
+                unique.append(candidate)
+            elif candidate.get("name_color") == "purple" and duplicate.get("name_color") != "purple":
+                # Keep the purple classification when both color masks match
+                # the same nametag so the ignore option cannot be bypassed by
+                # a few bright antialiased pixels.
+                unique[unique.index(duplicate)] = candidate
         # Distance from the detected player center is the primary rule.  A
         # coarse tile bucket can put a farther mob ahead of a closer one near
         # a bucket boundary, so it is kept only as diagnostic metadata.
@@ -443,6 +452,7 @@ class FrameVision:
                         "nx": x, "ny": y, "nw": native_w, "nh": native_h,
                         "click_x": click_x, "click_y": click_y, "distance": distance,
                         "score": float(result[py, px]), "scale": scale,
+                        "name_color": name_color,
                     })
 
         if not fallback_only:

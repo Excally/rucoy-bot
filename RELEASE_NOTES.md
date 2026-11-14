@@ -1,5 +1,58 @@
 # Release Notes
 
+## Unreleased
+
+### Changes
+
+- Ranged and Magic briefly switch to Melee after the first target click only when the target is beyond 300px. The bot waits for the marked target, then clicks it once if it remains out of range; targets within 300px stay in the training class.
+- Removed repeated walk-mark approach clicks while waiting for target confirmation.
+
+---
+
+## v2.3.2 - Close-Range Approach and Purple Nameplate Filter
+
+Release date: 2026-11-14
+
+### Changes
+
+- Ranged and Magic skip walk-mark checks and repeated approach clicks when the target is within a 400px radius of the detected player position.
+- Added the **Ignore purple named mob** launcher checkbox, persisted in `training_settings.json` and included in the Windows executable.
+- Added purple nameplate matching, using a matching asset when available and deriving the purple mask from the target template otherwise.
+- Rebuilt the release package with the current zombie minimap grid (1911x1638; exact 21x21 cells). The older `RucoyBot-Release.zip` had a 979x1021 zombie minimap that the grid validator correctly rejected.
+
+### Windows release artifacts
+
+| File | Size (bytes) | SHA-256 |
+|---|---:|---|
+| `RucoyBot-v2.3.2.exe` | 52,209,664 | `E65F707E6CF7567D0066E2C264053A699B9C68F10F8A7C935EBDA95C23FA43E0` |
+| `RucoyBot-v2.3.2-Windows.zip` | 52,377,452 | `6B640ECE5EF623DC945083C3CA1A657C8BE9A9901FAA9257F1E1FF6FA3FEA28D` |
+
+The one-file EXE was built with Python 3.14, Nuitka 4.2.2, and Zig 0.17.1. Nuitka warned that Windows Runtime DLLs are not bundled and must be available on the target Windows installation.
+
+---
+
+## v2.3.1 - Auto-Approach Quick Switch & Traversal Fixes
+
+Release date: 2026-11-14
+
+### Changes
+
+- Added auto-approach quick-switch trick for Ranged and Magic classes: upon confirming a target lock (`marked.png`), the bot briefly taps Melee (`0.1s` delay) to trigger game auto-pathing / walk-mark toward the target, then immediately taps back to the training class.
+- Added configurable `melee_approach_switch_delay` setting in `BotConfig` (default: `0.1s`).
+- Updated GUI header badge to v2.3.1.
+- Updated automated test suite covering Magic, Ranged, and Melee target-lock transition behaviors.
+
+### Windows release artifacts
+
+| File | Size (bytes) | SHA-256 |
+|---|---:|---|
+| `RucoyBot-v2.3.1.exe` | 52,200,448 | `104A364CB9FC5497791E967206457E3E7F204D484BB342AFBC709BC1CA4ACC52` |
+| `RucoyBot-v2.3.1-Windows.zip` | 52,134,071 | `663C79CCC2A0C79DF8A40C6B4DFCA9B418DA311A846224FF3A024573EC9A4899` |
+
+The EXE is a one-file Windows build made with Python 3.14, Nuitka 4.2.2, and Zig 0.17.1. It embeds the default templates and zone profiles. The ZIP adds the README, license, editable zone profiles, templates, and a clean empty settings file.
+
+---
+
 ## v2.3.0 - Targeting and Minimap Reliability
 
 Release date: 2026-11-13
